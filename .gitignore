@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 *.env
+.gh-config/
 
 # Dependencies & build outputs
 node_modules/
@@ -29,6 +30,7 @@ SnapClaim/
 # Datasets - large binary PDFs & cache
 datasets/synthdocqa/grounding_pdfs_v2/
 datasets/synthdocqa/.cache/
+datasets/synthdocqa/ALL_queries.json
 *.pdf
 
 # Runtime & storage documents
@@ -43,6 +45,17 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local benchmark caches and generated reports
+test/*_cache/
+test/benchmark_cache_ocr/
+test/benchmark_ocr_cache/
+test/page_visual_cache/
+test/visual_cache/
+test/table_structured_cache/
+test/annotation_region_cache/
+test/benchmark_results_*.json
+test/benchmark_report_*.md
 
 # IDE & OS files
 .vscode/

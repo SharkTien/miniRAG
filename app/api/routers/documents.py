@@ -14,7 +14,7 @@ from app.services.extract_service import ExtractService
 from app.repositories.document_repo import DocumentRepository
 from app.core.storage import StorageManager
 
-router = APIRouter(prefix="/api/documents", tags=["documents"])
+router = APIRouter(tags=["documents"])
 
 @router.get("")
 def get_docs(

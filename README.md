@@ -1,9 +1,27 @@
-# NTC Document RAG — ingestion MVP
+# NTC Document RAG — Mini RAG Service
 
-## Chạy
+## Tổng quan
+
+Mini RAG Service xử lý PDF, TXT, DOCX và ảnh/Office phổ biến theo luồng:
+
+```text
+upload → extract/OCR → clean + chunk → embedding → pgvector
+                                              ↓
+question → hybrid retrieval + evidence gate → grounded answer + sources
+```
+
+PDF scan và tài liệu có bảng/hình được giữ provenance theo trang. Crop hình và
+snapshot trang được lưu lazy trong MinIO để câu hỏi về figure/annotation có thể
+được gửi tới vision model khi cần.
+
+Chi tiết kiến trúc: [`docs/architecture.md`](docs/architecture.md).
+
+## Chạy bằng Docker
 
 ```bash
-# Cấu hình các secret và port trong .env
+cp .env.example .env
+# Điền JWT_SECRET_KEY, ADMIN_PASSWORD, POSTGRES_PASSWORD,
+# MINIO_ROOT_PASSWORD và NGC_API_KEY (nếu dùng model hosted)
 docker compose up -d --build
 ```
 
@@ -57,5 +75,51 @@ docker compose ps --all
 docker compose logs --tail=200 ntc_document_rag_worker
 curl -fsS http://localhost:41873/health
 ```
+
+## API chính
+
+`GET /health` trả về `{"status":"ok"}`.
+
+Upload một hoặc nhiều file (cả hai prefix đều được hỗ trợ):
+
+```bash
+curl -F 'files=@policy.pdf' http://localhost:41873/documents
+```
+
+Truy vấn và nhận câu trả lời cùng nguồn:
+
+```bash
+curl -X POST http://localhost:41873/query \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"Chính sách bảo hành là gì?","top_k":5}'
+```
+
+Response luôn có `answer` và `sources` (`file_name`, `chunk_id`, `page`,
+`snippet`). Ingestion chạy qua worker; chỉ truy vấn tài liệu khi trạng thái là
+`processed`.
+
+## Kiểm tra và benchmark
+
+```bash
+# Unit/API tests (sau khi cài requirements-dev.txt)
+pip install -r requirements.txt -r requirements-dev.txt
+PYTHONPATH=. pytest -q tests test/test_evidence_service.py test/test_ocr_routing.py
+
+# Kiểm tra cú pháp và cấu hình compose
+python -m compileall -q app tests
+docker compose config --quiet
+```
+
+Benchmark SynthDocQA chỉ dùng 5 PDF cục bộ và các câu hỏi thuộc 5 file đó.
+Báo cáo cải thiện và giới hạn được lưu tại
+[`evaluation/benchmark_summary.md`](evaluation/benchmark_summary.md).
+
+## Giới hạn đã biết
+
+- Chất lượng/latency phụ thuộc embedding và LLM endpoint được cấu hình.
+- Snapshot trang làm tăng dung lượng MinIO; tắt bằng `PERSIST_PAGE_VISUALS=false`
+  khi cần tiết kiệm storage.
+- Reranker hiện là rule-based; nên bổ sung cross-encoder và feedback loop trước
+  khi dùng cho quyết định có ảnh hưởng cao.
 
 Chi tiết quyết định kỹ thuật và kế hoạch benchmark nằm tại `Tinh_hoa_van_hoa/OCR_DEPLOYMENT.md`.

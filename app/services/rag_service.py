@@ -11,10 +11,12 @@ RAG Service (Retrieval-Augmented Generation)
 import re
 import time
 import json
+import base64
+from pathlib import Path
 import logging
 import urllib.request
 import urllib.error
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 from app.core.config import (
     NGC_API_KEY,
@@ -22,10 +24,26 @@ from app.core.config import (
     LLM_RAG_MODEL,
     TOP_K,
 )
-from app.services.retrieval_service import RetrievalService
 from app.services.evidence_service import EvidenceService
 
+if TYPE_CHECKING:
+    from app.services.retrieval_service import RetrievalService
+
 logger = logging.getLogger("rag_service")
+
+
+def build_grounded_qa_system_prompt() -> str:
+    """Shared production/benchmark prompt for multilingual document QA."""
+    return (
+        "You are a document question-answering assistant. Answer using the supplied evidence only. "
+        "The evidence may be in any language and may contain tables, forms, lists, OCR text, or attached page images. "
+        "When an image is attached, inspect only the relevant figure or annotation and tie claims to its visible labels and layout. "
+        "Read values and labels together; do not transfer a value from a neighboring row, form, or section. "
+        "Preserve names, numbers, units, dates, conditions, and distinctions exactly. "
+        "If the evidence supports only part of the question, answer that part and state what is missing. "
+        "If it does not contain the answer, say that the available excerpts do not provide it. "
+        "Do not guess or add outside facts. Reply in the language used by the question, clearly and concisely."
+    )
 
 # ─── GUARDRAIL PATTERNS (Chitchat / General Intent) ────────────────────────────
 # Các mẫu câu chào hỏi, xã giao, hỏi năng lực – KHÔNG cần tìm trong tài liệu
@@ -61,7 +79,7 @@ _CHITCHAT_RE = re.compile(
 class RagService:
     def __init__(
         self,
-        retriever: RetrievalService,
+        retriever: "RetrievalService",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
@@ -156,9 +174,14 @@ class RagService:
             }
 
         # 1. Retrieval
+        # Retrieve a wider candidate pool, then rerank and trim to the context
+        # budget. Fetching only top_k here made the reranker unable to recover
+        # relevant passages ranked just below the vector-search cutoff.
+        final_k = max(1, min(int(top_k or TOP_K), 8))
+        candidate_k = min(40, max(final_k * 4, 16))
         raw_chunks = self.retriever.retrieve(
             query=q,
-            top_k=top_k,
+            top_k=candidate_k,
             document_id=document_id,
         )
 
@@ -169,7 +192,7 @@ class RagService:
         matched_chunks = [
             chunk for chunk in reranked_chunks
             if chunk.get("content_relevance_score", 0.0) >= 0.12
-        ][:max(1, min(top_k, 8))]
+        ][:final_k]
         evidence_state = self.evidence.assess(q, matched_chunks)
 
         if matched_chunks and evidence_state.relevance != "IRRELEVANT" and not evidence_state.answerability:
@@ -214,7 +237,7 @@ class RagService:
 
         for idx, chunk in enumerate(matched_chunks):
             meta = chunk.get("metadata") or {}
-            page = meta.get("page") or meta.get("page_no") or "?"
+            page = meta.get("page") or meta.get("page_no") or meta.get("page_start") or "?"
             file_name = chunk.get("original_filename") or chunk.get("file_name") or "document.pdf"
             doc_id = str(chunk.get("document_id") or "")
             chunk_id = chunk.get("chunk_id", f"chunk_{idx+1}")
@@ -238,38 +261,39 @@ class RagService:
 
         full_context = "\n\n".join(context_blocks)
 
-        # 3. Prompt Engineering (Evidence Sufficiency, Strict Entailment & High Generation Fidelity)
-        system_prompt = (
-            "Bạn là chuyên viên pháp lý và đối soát thông tin văn bản nội bộ với độ chính xác tuyệt đối.\n"
-            "BẮT BUỘC TUÂN THỦ NGHIÊM NGẶT CÁC NGUYÊN TẮC SUY LUẬN VÀ TRÌNH BÀY SAU:\n\n"
-            "1. NGUYÊN TẮC KIỂM TRA BẰNG CHỨNG ĐẦY ĐỦ VÀ TỪ CHỐI SUY DIỄN (EVIDENCE SUFFICIENCY & ABSTAIN):\n"
-            "   - Bạn CHỈ ĐƯỢC PHÉP trả lời dựa trên các dữ liệu, sự kiện và điều khoản có thực trong phần `--- CONTEXT ---`.\n"
-            "   - Nếu câu hỏi yêu cầu giải đáp một nội dung/vấn đề cụ thể (ví dụ: làm thêm giờ có được tính lương không, cách tính lương, định mức chế độ, thời gian nghỉ phép...) mà trong `--- CONTEXT ---` KHÔNG CÓ điều khoản hoặc chính sách giải đáp trực tiếp:\n"
-            "     * BẮT BUỘC PHẢI TUYÊN BỐ RÕ RÀNG NGAY TẠI CÂU ĐẦU TIÊN: Tài liệu hiện có không có thông tin hoặc quy định về [nội dung câu hỏi].\n"
-            "     * NÊU ĐÚNG PHẠM VI THỰC TẾ CỦA TÀI LIỆU CÓ TRONG CONTEXT: Chỉ tóm tắt đúng những gì tài liệu thực tế đề cập (ví dụ: văn bản chỉ cung cấp đường link hướng dẫn nhân sự gửi đơn đăng ký làm thêm giờ, không có quy định tính lương...).\n"
-            "     * TUYỆT ĐỐI CẤM: Không được sử dụng kiến thức pháp luật bên ngoài (như Bộ luật Lao động 2019, các quy định pháp luật chung) để tự suy luận hoặc trả lời thay cho tài liệu. Không được suy diễn 'sẽ được tính lương theo quy định pháp luật' hay 'tuân thủ lương tối thiểu' khi tài liệu nội bộ không quy định.\n"
-            "     * TUYỆT ĐỐI CẤM: Không được tự tiện trích dẫn hay đưa các quy định không liên quan của các tài liệu khác vào câu trả lời.\n\n"
-            "2. TUYỆT ĐỐI CHÍNH XÁC VỀ THUẬT NGỮ PHÁP LÝ & BẰNG CHỨNG (STRICT GROUNDEDNESS):\n"
-            "   - Tuyệt đối phân biệt giữa 'tiếp nhận hồ sơ' và 'xử lý / giải quyết / phê duyệt hồ sơ'. Nếu văn bản chỉ xác nhận 'đã được tiếp nhận vào ngày 05/6/2026' thì CHỈ ĐƯỢC DÙNG TỪ 'tiếp nhận', tuyệt đối không được suy diễn thành 'tiếp nhận và xử lý' hay 'đã xử lý/phê duyệt'.\n"
-            "   - Chống gom điều kiện và mốc thời gian (Anti-temporal collapsing): Phải phân tách rõ ràng các nhánh điều kiện và mốc thời gian độc lập:\n"
-            "     + Xác nhận tiếp nhận: Hồ sơ đăng ký nội quy lao động đã được tiếp nhận vào ngày 05/6/2026.\n"
-            "     + Hành động nội bộ: Thực hiện thông báo nội quy lao động đến từng người lao động và niêm yết ở những nơi cần thiết tại nơi làm việc.\n"
-            "     + Điều kiện riêng và mốc hiệu lực: Trường hợp có chi nhánh, đơn vị tại địa phương khác -> Gửi nội quy đến cơ quan quản lý lao động cấp tỉnh nơi đặt chi nhánh SAU KHI NỘI QUY CÓ HIỆU LỰC (chứ không phải gửi ngay khi tiếp nhận).\n"
-            "     + Trách nhiệm pháp lý thường xuyên: Tuân thủ quy định pháp luật lao động và thường xuyên cập nhật để rà soát, sửa đổi, bổ sung và đăng ký lại khi cần thiết (đây là trách nhiệm thường xuyên, không phải hành động phát sinh tức thời sau ngày tiếp nhận).\n"
-            "   - Bảo toàn từ ngữ (Anti-omission): Nếu đoạn trích bị đứt từ do cắt đoạn (ví dụ 'lao động yết ở những nơi...'), phải hiểu và ghi đúng ngữ cảnh gốc là 'thông báo đến từng người lao động và niêm yết ở những nơi cần thiết tại nơi làm việc'. Tuyệt đối không được nuốt từ làm cụt chữ.\n\n"
-            "3. CẤU TRÚC VÀ VĂN PHONG TRÌNH BÀY:\n"
-            "   - Trình bày trực tiếp, gãy gọn, chuẩn mực văn bản công sở.\n"
-            "   - Khi tài liệu có đủ thông tin: Trình bày các nội dung theo danh sách đánh số có tiêu đề in đậm trước dấu hai chấm.\n"
-            "   - Tuyệt đối KHÔNG có tiền tố máy móc như 'Câu trả lời:', 'Trả lời:', '--- CÂU TRẢ LỜI ---'.\n"
-            "   - Tuyệt đối KHÔNG nhắc đến đuôi tệp (.pdf, .docx).\n"
-            "   - Tuyệt đối KHÔNG dùng emoji hay icon.\n"
-            "   - Chỉ xuất ra nội dung câu trả lời cuối cùng cho người dùng, không trích dẫn lại các câu lệnh hay nguyên tắc của prompt."
-        )
+        system_prompt = build_grounded_qa_system_prompt()
 
-        user_prompt = f"--- CONTEXT ---\n{full_context}\n\n--- CÂU HỎI ---\n{q}\n\nTrả lời trực tiếp:"
+        user_prompt = f"--- EVIDENCE ---\n{full_context}\n\n--- QUESTION ---\n{q}\n\nAnswer directly:"
+        image_inputs = []
+        storage = None
+        for chunk in matched_chunks:
+            meta = chunk.get("metadata") or {}
+            visual_items = meta.get("visual_evidence") or []
+            visual_items = list(visual_items) + list(meta.get("page_visual_evidence") or [])
+            if meta.get("image_object_key"):
+                visual_items = [meta] + visual_items
+            for visual in visual_items[:2]:
+                encoded = visual.get("image_base64")
+                image_path = visual.get("image_path")
+                object_key = visual.get("image_object_key")
+                if not encoded and object_key:
+                    try:
+                        from app.core.storage import StorageManager
+                        storage = storage or StorageManager()
+                        encoded = base64.b64encode(storage.get_object(object_key)["Body"].read()).decode("ascii")
+                    except Exception as exc:
+                        logger.warning("Không tải được visual evidence %s: %s", object_key, exc)
+                if not encoded and image_path:
+                    try:
+                        encoded = base64.b64encode(Path(str(image_path)).read_bytes()).decode("ascii")
+                    except (OSError, ValueError):
+                        encoded = None
+                if encoded:
+                    mime = visual.get("image_mime_type", "image/png")
+                    image_inputs.append(f"data:{mime};base64,{encoded}")
 
         # 4. Gọi NVIDIA NIM LLM
-        answer = self._call_llm(system_prompt, user_prompt)
+        answer = self._call_llm(system_prompt, user_prompt, image_inputs=image_inputs)
 
         # 5. Làm sạch nếu có đuôi tệp kỹ thuật hoặc cụm từ máy móc vô tình lọt vào
         if answer:
@@ -294,7 +318,7 @@ class RagService:
             "execution_time_seconds": elapsed,
         }
 
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, image_inputs: Optional[List[str]] = None) -> str:
         """Gửi request tới OpenAI-compatible chat completions endpoint của NVIDIA NIM."""
         if not self.api_key:
             return (
@@ -303,11 +327,19 @@ class RagService:
             )
 
         endpoint = f"{self.base_url}/chat/completions"
+        user_content: Any = user_prompt
+        if image_inputs:
+            user_content = [{"type": "text", "text": user_prompt}]
+            # The configured NVIDIA vision endpoint accepts one image per
+            # request. Keep the first crop, which is already selected from the
+            # highest-ranked evidence chunk, instead of sending an invalid
+            # multi-image payload.
+            user_content.append({"type": "image_url", "image_url": {"url": image_inputs[0]}})
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": user_content},
             ],
             "temperature": 0.2,
             "max_tokens": 1500,

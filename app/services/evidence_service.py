@@ -19,12 +19,20 @@ _STOPWORDS = {
     "đã", "đang", "sẽ", "phải", "cần", "gì", "ai", "đâu", "nào", "sao",
     "thế", "như", "này", "đó", "ra", "vào", "lại", "thực", "hiện", "hãy",
     "xin", "vui", "lòng", "cho", "biết", "tôi", "mình", "bạn", "thì",
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on",
+    "for", "from", "with", "by", "is", "are", "was", "were", "be",
+    "been", "being", "what", "which", "who", "when", "where", "why",
+    "how", "does", "do", "did", "can", "could", "would", "should",
+    "please", "tell", "me", "about", "this", "that", "these", "those",
 }
 
 _ANSWER_TERMS = {
     "lương", "tiền", "mức", "tính", "trả", "thanh toán", "hưởng", "được hưởng",
     "điều kiện", "thời hạn", "thời gian", "quy trình", "hồ sơ", "phê duyệt",
     "nghỉ", "ngày", "giờ", "tỷ lệ", "phụ cấp", "trợ cấp", "đăng ký",
+    "amount", "price", "cost", "total", "date", "time", "rate", "number",
+    "name", "address", "condition", "deadline", "period", "process", "form",
+    "approved", "approval", "leave", "hours", "salary", "payment", "paid",
 }
 
 

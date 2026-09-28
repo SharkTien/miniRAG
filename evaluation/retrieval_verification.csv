@@ -1,0 +1,11 @@
+question,expected_source,verification_rule,result
+What is the form number on the Capital Expenditure Approval Form?,doc_0000_s1045958549.pdf,source filename must match,pass
+How many sections are included in the Capital Expenditure Approval Form?,doc_0000_s1045958549.pdf,source filename must match,pass
+How many fields are marked as required?,doc_0000_s1045958549.pdf,source filename must match,pass
+What is the approval status shown on the form?,doc_0000_s1045958549.pdf,source filename must match,pass
+What is the total amount requested?,doc_0000_s1045958549.pdf,source filename must match,pass
+What is the retention period stated in the policy?,doc_0000_s1131058660.pdf,source filename must match,pass
+Which department owns the process?,doc_0000_s341236940.pdf,source filename must match,pass
+What warning is shown in the figure?,doc_0000_s39946201.pdf,source filename must match,pass
+What is the effective date of the procedure?,doc_0000_s71722309.pdf,source filename must match,pass
+Which role gives final approval?,doc_0000_s71722309.pdf,source filename must match,pass

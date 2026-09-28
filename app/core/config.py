@@ -98,6 +98,8 @@ if HF_TOKEN:
     os.environ["HUGGING_FACE_HUB_TOKEN"] = HF_TOKEN
 
 EXTRACTION_PAGE_CONCURRENCY = int(os.getenv("EXTRACTION_PAGE_CONCURRENCY", "2"))
+PERSIST_PAGE_VISUALS = os.getenv("PERSIST_PAGE_VISUALS", "true").lower() == "true"
+PAGE_VISUAL_SCALE = max(0.75, float(os.getenv("PAGE_VISUAL_SCALE", "1.5")))
 
 # RAGFlow & DeepDoc Configuration
 DOCUMENT_PARSER_ENGINE = os.getenv("DOCUMENT_PARSER_ENGINE", "auto").lower()  # auto, ppocr, ragflow, docling

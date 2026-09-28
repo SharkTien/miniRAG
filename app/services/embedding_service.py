@@ -29,10 +29,12 @@ class EmbeddingService:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
+        fallback_to_mock: bool = False,
     ):
         self.api_key = (api_key or NGC_API_KEY or "").strip()
         self.base_url = (base_url or EMBEDDING_BASE_URL or "https://integrate.api.nvidia.com/v1").rstrip("/")
         self.model = model or EMBEDDING_MODEL or "nvidia/nv-embedqa-e5-v5"
+        self.fallback_to_mock = fallback_to_mock
 
     def embed_texts(self, texts: List[str], input_type: str = "passage") -> List[List[float]]:
         """
@@ -43,6 +45,8 @@ class EmbeddingService:
             return []
 
         if not self.api_key:
+            if not self.fallback_to_mock:
+                raise RuntimeError("NGC_API_KEY is required when mock embedding fallback is disabled")
             logger.warning("NGC_API_KEY không được cấu hình. Sử dụng mock embedding cho testing.")
             return [self._mock_embedding(t) for t in texts]
 
@@ -55,6 +59,10 @@ class EmbeddingService:
             batch_embeddings = self._call_embedding_api(batch, input_type=input_type)
             all_embeddings.extend(batch_embeddings)
 
+        if len(all_embeddings) != len(texts):
+            raise RuntimeError(
+                f"Embedding API returned {len(all_embeddings)} vectors for {len(texts)} inputs"
+            )
         return all_embeddings
 
     def embed_query(self, query: str) -> List[float]:
@@ -106,17 +114,22 @@ class EmbeddingService:
                 if http_err.code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
                     time.sleep(backoff * (attempt + 1))
                     continue
-                # Nếu API lỗi mà còn lượt, fallback mock
                 logger.error("Embedding API thất bại: %s", err_content[:300])
-                return [self._mock_embedding(t) for t in texts]
+                if self.fallback_to_mock:
+                    return [self._mock_embedding(t) for t in texts]
+                raise RuntimeError(f"Embedding API failed with HTTP {http_err.code}: {err_content[:300]}") from http_err
             except Exception as exc:
                 logger.warning("Lỗi kết nối Embedding API (attempt %d/%d): %s", attempt + 1, max_retries, exc)
                 if attempt < max_retries - 1:
                     time.sleep(backoff * (attempt + 1))
                     continue
-                return [self._mock_embedding(t) for t in texts]
+                if self.fallback_to_mock:
+                    return [self._mock_embedding(t) for t in texts]
+                raise RuntimeError(f"Embedding API request failed after {max_retries} attempts: {exc}") from exc
 
-        return [self._mock_embedding(t) for t in texts]
+        if self.fallback_to_mock:
+            return [self._mock_embedding(t) for t in texts]
+        raise RuntimeError("Embedding API failed without returning vectors")
 
     def _mock_embedding(self, text: str) -> List[float]:
         """Tạo deterministic pseudo-embedding phục vụ fallback / offline testing."""

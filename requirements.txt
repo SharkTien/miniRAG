@@ -4,12 +4,13 @@ python-multipart==0.0.20
 boto3==1.35.90
 psycopg[binary]==3.2.3
 jinja2==3.1.5
-docling>=2.0,<3.0
+docling==2.130.0
 pypdf>=6.0,<7.0
-llama-index-core>=0.12,<0.15
+llama-index-core==0.12.0
 argon2-cffi==23.1.0
 pyjwt==2.8.0
 passlib[argon2]==1.7.4
 python-dotenv>=1.0,<2.0
-deepdoc-lib>=0.2.0
-ragflow-sdk>=0.1.0
+deepdoc-lib==0.2.2
+pypdfium2>=4.30,<5.0
+Pillow>=10.0,<12.0

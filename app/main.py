@@ -49,7 +49,10 @@ def get_pdf_worker():
 
 # Include Routers
 app.include_router(auth.router)
-app.include_router(documents.router)
+app.include_router(documents.router, prefix="/api/documents")
+# Keep the short paths required by the Mini RAG specification while retaining
+# the existing /api namespace used by the frontend.
+app.include_router(documents.router, prefix="/documents", include_in_schema=False)
 app.include_router(query.router)
 app.include_router(query.router, prefix="/api")
 app.include_router(conversations.router)

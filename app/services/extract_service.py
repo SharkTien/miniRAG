@@ -2,6 +2,7 @@ import uuid
 import tempfile
 import os
 import time
+import io
 from pathlib import Path
 from app.core.storage import StorageManager
 from app.repositories.document_repo import DocumentRepository
@@ -13,6 +14,8 @@ from app.core.config import (
     DOCLING_TESSERACT_OSD,
     SEMANTIC_NORMALIZER, SEMANTIC_NORMALIZE_OCR_ONLY,
     SEMANTIC_OCR_CONFIDENCE_GATE,
+    PERSIST_PAGE_VISUALS,
+    PAGE_VISUAL_SCALE,
 )
 import threading
 from app.services.normalize_service import NormalizeService
@@ -84,6 +87,86 @@ class ExtractService:
         self._embedder = EmbeddingService()
         self._chunk_repo = ChunkRepository(repo.db)
 
+    def _persist_visual_crops(self, pdf_path: str, doc_id: uuid.UUID, image_bboxes: list[dict]) -> list[dict]:
+        """Render Docling picture regions and persist compact visual evidence in object storage."""
+        if not image_bboxes or Path(pdf_path).suffix.lower() != ".pdf":
+            return image_bboxes
+        try:
+            import pypdfium2 as pdfium
+            from PIL import Image
+            pdf = pdfium.PdfDocument(pdf_path)
+            for index, item in enumerate(image_bboxes):
+                page_no = int(item.get("page_no") or 1)
+                if page_no < 1 or page_no > len(pdf):
+                    continue
+                page = pdf[page_no - 1]
+                width, height = page.get_size()
+                scale = 2.0
+                bitmap = page.render(scale=scale)
+                image = bitmap.to_pil().convert("RGB")
+                box = item.get("bbox") or {}
+                left = max(0, int(float(box.get("left", 0)) * scale))
+                right = min(image.width, int(float(box.get("right", width)) * scale))
+                # Docling PDF coordinates use bottom-left origin.
+                top = max(0, int((height - float(box.get("top", height))) * scale))
+                bottom = min(image.height, int((height - float(box.get("bottom", 0))) * scale))
+                if right <= left or bottom <= top:
+                    continue
+                crop = image.crop((left, top, right, bottom))
+                payload = io.BytesIO()
+                crop.save(payload, format="PNG", optimize=True)
+                payload.seek(0)
+                key = f"visual_crops/{doc_id}/page_{page_no}_{index}.png"
+                self.storage.upload_fileobj(payload, key, "image/png")
+                item["image_object_key"] = key
+                item["image_mime_type"] = "image/png"
+            pdf.close()
+            return image_bboxes
+        except Exception as exc:
+            print(f"[{doc_id}] visual crop persistence skipped: {exc}", flush=True)
+            return image_bboxes
+
+    def _persist_page_visuals(self, pdf_path: str, doc_id: uuid.UUID, page_count: int) -> list[dict]:
+        """Persist one compressed page snapshot for visual QA and annotations.
+
+        Text chunks keep only the object key and page number.  The image is
+        fetched lazily by ``RagService`` when a visual answer needs it, so
+        ordinary text queries do not pay the download or prompt cost.
+        """
+        if not PERSIST_PAGE_VISUALS or Path(pdf_path).suffix.lower() != ".pdf":
+            return []
+        visuals: list[dict] = []
+        pdf = None
+        try:
+            import pypdfium2 as pdfium
+            pdf = pdfium.PdfDocument(pdf_path)
+            total = min(max(1, int(page_count or len(pdf))), len(pdf))
+            for page_index in range(total):
+                try:
+                    bitmap = pdf[page_index].render(scale=PAGE_VISUAL_SCALE)
+                    image = bitmap.to_pil().convert("RGB")
+                    payload = io.BytesIO()
+                    image.save(payload, format="JPEG", quality=84, optimize=True)
+                    payload.seek(0)
+                    page_no = page_index + 1
+                    key = f"page_visuals/{doc_id}/page_{page_no}.jpg"
+                    self.storage.upload_fileobj(payload, key, "image/jpeg")
+                    visuals.append({
+                        "image_object_key": key,
+                        "image_mime_type": "image/jpeg",
+                        "page": page_no,
+                    })
+                except Exception as page_exc:
+                    print(f"[{doc_id}] page visual {page_index + 1} skipped: {page_exc}", flush=True)
+        except Exception as exc:
+            print(f"[{doc_id}] page visual persistence skipped: {exc}", flush=True)
+        finally:
+            if pdf is not None:
+                try:
+                    pdf.close()
+                except Exception:
+                    pass
+        return visuals
     @staticmethod
     def _pdf_has_text(path: str) -> bool:
         """Sample a few pages so digital PDFs can skip the OCR stage."""
@@ -92,13 +175,54 @@ class ExtractService:
         try:
             from pypdf import PdfReader
             reader = PdfReader(path, strict=False)
-            pages = reader.pages[: min(3, len(reader.pages))]
-            page_lengths = [len((page.extract_text() or "").strip()) for page in pages]
-            # A few hidden characters on one page are not enough to classify a
-            # scanned/hybrid PDF as native text.
-            return bool(page_lengths) and sum(length >= 100 for length in page_lengths) == len(page_lengths)
+            page_count = len(reader.pages)
+            if not page_count:
+                return False
+            # Sample across the entire file: covers commonly mixed PDFs where
+            # the first pages are digital text but later pages are scans/forms.
+            sample_count = min(7, page_count)
+            sample_indexes = sorted({
+                round(i * (page_count - 1) / max(1, sample_count - 1))
+                for i in range(sample_count)
+            })
+            page_lengths = [
+                len((reader.pages[index].extract_text() or "").strip())
+                for index in sample_indexes
+            ]
+            # OCR the whole PDF if even one sampled page lacks a usable text
+            # layer. Hybrid files often place scans/forms in later sections.
+            return bool(page_lengths) and all(length >= 100 for length in page_lengths)
         except Exception as exc:
             print(f"Could not inspect PDF text layer: {exc}", flush=True)
+            return False
+
+    @staticmethod
+    def _pdf_has_embedded_images(path: str) -> bool:
+        """Detect image-heavy PDFs whose visible text is absent from the text layer."""
+        if Path(path).suffix.lower() != ".pdf":
+            return False
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(path, strict=False)
+            page_count = len(reader.pages)
+            if not page_count:
+                return False
+            sample_count = min(7, page_count)
+            sample_indexes = sorted({
+                round(i * (page_count - 1) / max(1, sample_count - 1))
+                for i in range(sample_count)
+            })
+            image_pages = 0
+            for index in sample_indexes:
+                try:
+                    image_pages += bool(reader.pages[index].images)
+                except Exception:
+                    continue
+            # Require recurring images so a one-off logo does not send every
+            # otherwise-native PDF through the OCR pipeline.
+            return image_pages >= max(2, (len(sample_indexes) + 1) // 2)
+        except Exception as exc:
+            print(f"Could not inspect PDF images: {exc}", flush=True)
             return False
 
     @staticmethod
@@ -271,6 +395,7 @@ class ExtractService:
             extraction_started = time.monotonic()
             source_suffix = Path(original_filename).suffix.lower()
             native_pdf_text = self._pdf_has_text(tmp_name)
+            pdf_has_embedded_images = self._pdf_has_embedded_images(tmp_name)
             extraction_complete = False
             parser_used = None
             do_ocr = False
@@ -389,7 +514,9 @@ class ExtractService:
                     do_ocr = False
                 else:
                     do_ocr = source_suffix in {".png", ".jpg", ".jpeg"} or (
-                        source_suffix == ".pdf" and not native_pdf_text
+                        source_suffix == ".pdf" and (
+                            not native_pdf_text or pdf_has_embedded_images
+                        )
                     )
                 print(
                     f"Processing {original_filename}: total_pages={total_pages}, do_ocr={do_ocr}, "
@@ -433,6 +560,7 @@ class ExtractService:
                 source_suffix = Path(original_filename).suffix.lower()
                 self._normalize_office_bboxes(image_bboxes, source_suffix)
                 self._normalize_office_bboxes(ocr_bboxes, source_suffix)
+                image_bboxes = self._persist_visual_crops(tmp_name, doc_id, image_bboxes)
                 clean_text, normalized_elements = self._normalizer.normalize(
                     doc_json,
                     {"document_id": str(doc_id), "filename": original_filename},
@@ -444,6 +572,7 @@ class ExtractService:
                 extraction_complete = True
 
             extraction_elapsed = round(time.monotonic() - extraction_started, 3)
+            page_visuals = self._persist_page_visuals(tmp_name, doc_id, page_count)
             should_semantic_normalize = (
                 SEMANTIC_NORMALIZER not in {"none", "off", "false"}
                 and (do_ocr or not SEMANTIC_NORMALIZE_OCR_ONLY)
@@ -516,6 +645,37 @@ class ExtractService:
             else:
                 chunks = self._normalizer.chunk_text(semantic_text, doc_meta)
 
+            # Attach at most two visual crops from the same page range to each
+            # text chunk. The image is fetched lazily only if that chunk wins
+            # retrieval, so ordinary text-only queries pay no image cost.
+            for chunk in chunks:
+                meta = chunk.get("metadata") or {}
+                start = meta.get("page_start")
+                end = meta.get("page_end") or start
+                visuals = [
+                    item for item in image_bboxes
+                    if item.get("image_object_key")
+                    and start is not None
+                    and item.get("page_no") is not None
+                    and int(start) <= int(item["page_no"]) <= int(end)
+                ][:2]
+                if visuals:
+                    meta["visual_evidence"] = [
+                        {"image_object_key": item["image_object_key"], "image_mime_type": item.get("image_mime_type", "image/png"), "page": item.get("page_no"), "bbox": item.get("bbox")}
+                        for item in visuals
+                    ]
+                if page_visuals:
+                    page_start = int(start) if start is not None else None
+                    page_end = int(end) if end is not None else page_start
+                    page_evidence = [
+                        item for item in page_visuals
+                        if page_start is not None and page_start <= int(item["page"]) <= int(page_end)
+                    ][:2]
+                    if page_evidence:
+                        meta["page_visual_evidence"] = page_evidence
+                if visuals or page_visuals:
+                    chunk["metadata"] = meta
+
             print(f"[{doc_id}] stage=chunk_done chunks={len(chunks)} chars={len(semantic_text)}", flush=True)
             self.repo.update_progress(doc_id, 88, 'Cắt nhỏ thành các đoạn tìm kiếm')
 
@@ -549,7 +709,11 @@ class ExtractService:
                 self.repo.update_progress(doc_id, 95, 'Lưu vào cơ sở dữ liệu')
 
             except Exception as emb_exc:
-                print(f"[{doc_id}] stage=embedding_warning error={emb_exc}", flush=True)
+                # Never report a document as searchable when its vectors were
+                # not created. A retry after the embedding service is restored
+                # is safer than a silent processed-but-unretrievable document.
+                print(f"[{doc_id}] stage=embedding_failed error={emb_exc}", flush=True)
+                raise RuntimeError(f"Embedding failed; document was not indexed: {emb_exc}") from emb_exc
 
             if not self.repo.is_document_active(doc_id):
                 return
@@ -583,6 +747,7 @@ class ExtractService:
                 },
                 "entities": [], # Phase 2: VLM / Quality Checker
                 "images": image_bboxes,
+                "page_visuals": page_visuals,
                 "ocr_bboxes": ocr_bboxes,
                 "raw_docling": doc_json # Structured document
             }
