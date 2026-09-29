@@ -6,12 +6,45 @@ Store and query vector similarity in the document_chunks table through pgvector.
 
 import uuid
 import logging
+import math
+import re
 from typing import List, Dict, Any, Optional
 from psycopg.types.json import Jsonb
 from app.config.database import DatabaseManager
 from app.config.settings import TOP_K
 
 logger = logging.getLogger("chunk_repo")
+
+
+def _bm25_scores(query: str, contents: List[str]) -> List[float]:
+    """Score the candidate pool with a small dependency-free BM25 pass."""
+    def tokenize(text: str) -> list[str]:
+        return re.findall(r"[\wÀ-ỹ]+", (text or "").lower(), re.UNICODE)
+    query_terms = tokenize(query)
+    documents = [tokenize(content) for content in contents]
+    if not documents or not query_terms:
+        return [0.0] * len(contents)
+    document_frequency = {
+        term: sum(term in set(doc) for doc in documents)
+        for term in set(query_terms)
+    }
+    average_length = sum(len(doc) for doc in documents) / max(1, len(documents))
+    scores = []
+    for doc in documents:
+        frequencies = {}
+        for term in doc:
+            frequencies[term] = frequencies.get(term, 0) + 1
+        score = 0.0
+        for term in query_terms:
+            df = document_frequency.get(term, 0)
+            if not df:
+                continue
+            idf = math.log(1.0 + (len(documents) - df + 0.5) / (df + 0.5))
+            tf = frequencies.get(term, 0)
+            denominator = tf + 1.5 * (1.0 - 0.75 + 0.75 * len(doc) / max(1.0, average_length))
+            score += idf * (tf * 2.5 / max(1.0, denominator))
+        scores.append(score)
+    return scores
 
 
 class ChunkRepository:
@@ -127,7 +160,8 @@ class ChunkRepository:
                         c.content,
                         c.metadata,
                         d.original_filename,
-                        COALESCE(vr.sim_score, 0.5) AS similarity_score,
+                        COALESCE(vr.sim_score, 0.0) AS dense_score,
+                        COALESCE(tr.text_score, 0.0) AS lexical_score,
                         (COALESCE(1.0 / (60.0 + vr.rnk), 0.0) + COALESCE(1.0 / (60.0 + tr.rnk), 0.0)) AS rrf_score
                     FROM document_chunks c
                     JOIN documents d ON c.document_id = d.id
@@ -147,11 +181,25 @@ class ChunkRepository:
                 with self.db.connect() as conn:
                     rows = conn.execute(hybrid_sql, hybrid_params).fetchall()
                     if rows:
+                        bm25_scores = _bm25_scores(text_clean, [row[3] for row in rows])
+                        max_bm25 = max(bm25_scores, default=0.0) or 1.0
+                        hybrid_scores = [
+                            0.65 * float(row[6] or 0.0) + 0.35 * (bm25 / max_bm25)
+                            for row, bm25 in zip(rows, bm25_scores)
+                        ]
+                        sorted_scores = sorted(hybrid_scores)
+                        median = sorted_scores[len(sorted_scores) // 2]
+                        spread = sorted_scores[-1] - sorted_scores[0]
+                        score_cutoff = max(min_similarity, median + 0.20 * spread)
                         results = []
-                        for row in rows:
-                            score = float(row[6]) if row[6] is not None else 0.0
+                        ranked_rows = sorted(
+                            zip(rows, bm25_scores, hybrid_scores),
+                            key=lambda item: item[2],
+                            reverse=True,
+                        )
+                        for row, bm25, score in ranked_rows:
                             # Chỉ giữ chunk nếu đạt min_similarity hoặc text match có vector similarity hợp lệ
-                            if score >= min_similarity or (row[7] > 0.01 and score >= 0.35):
+                            if score >= score_cutoff:
                                 results.append({
                                     "chunk_id": str(row[0]),
                                     "document_id": str(row[1]),
@@ -160,6 +208,9 @@ class ChunkRepository:
                                     "metadata": row[4] or {},
                                     "file_name": row[5],
                                     "similarity_score": round(score, 4),
+                                    "dense_score": round(float(row[6] or 0.0), 4),
+                                    "bm25_score": round(bm25, 4),
+                                    "retrieval_score_cutoff": round(score_cutoff, 4),
                                 })
                         if results:
                             return results

@@ -10,7 +10,8 @@ GROUNDED_QA_SYSTEM_PROMPT = (
     "Preserve names, numbers, units, dates, conditions, and distinctions exactly. "
     "If the evidence supports only part of the question, answer that part and state what is missing. "
     "If it does not contain the answer, say that the available excerpts do not provide it. "
-    "Do not guess or add outside facts. Reply in the language used by the question, clearly and concisely."
+    "Do not guess or add outside facts. Reply only in Vietnamese, clearly and concisely. "
+    "If the question is not Vietnamese, translate the answer into Vietnamese while preserving names, numbers, units, and dates."
 )
 
 CHITCHAT_SYSTEM_PROMPT = (

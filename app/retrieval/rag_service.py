@@ -102,6 +102,22 @@ class RagService:
         return False
 
     @staticmethod
+    def _deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove repeated OCR/native chunks before context construction."""
+        seen = set()
+        unique = []
+        for chunk in chunks:
+            content = re.sub(r"\s+", " ", str(chunk.get("content") or "")).strip().lower()
+            if not content:
+                continue
+            fingerprint = content
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            unique.append(chunk)
+        return unique
+
+    @staticmethod
     def _compute_intent_overlap(query: str, doc_name: str, content: str) -> float:
         """
         Compute content-only intent overlap between a question and a document chunk.
@@ -175,10 +191,20 @@ class RagService:
         # Content-only evidence gate.  Retrieval may return related-looking
         # chunks, but generation is allowed only when the content itself is
         # relevant, sufficiently covering the question, and consistent.
-        reranked_chunks = self.evidence.rerank(q, raw_chunks)
+        reranked_chunks = self._deduplicate_chunks(self.evidence.rerank(q, raw_chunks))
+        relevance_scores = sorted(
+            float(chunk.get("content_relevance_score", 0.0))
+            for chunk in reranked_chunks
+        )
+        if relevance_scores:
+            median = relevance_scores[len(relevance_scores) // 2]
+            score_spread = relevance_scores[-1] - relevance_scores[0]
+            distribution_cutoff = max(0.12, median + 0.25 * score_spread)
+        else:
+            distribution_cutoff = 0.12
         matched_chunks = [
             chunk for chunk in reranked_chunks
-            if chunk.get("content_relevance_score", 0.0) >= 0.12
+            if chunk.get("content_relevance_score", 0.0) >= distribution_cutoff
         ][:final_k]
         evidence_state = self.evidence.assess(q, matched_chunks)
 
