@@ -16,6 +16,9 @@ xác nhận kết quả.
 | Run | `docker compose up -d --build` trong README | Đạt theo cấu hình Compose |
 | CI khi có thay đổi | `.github/workflows/ci.yml` chạy khi push/pull request | Đã cấu hình; chuỗi tương đương runner đã đạt cục bộ |
 
+CI có thêm job build frontend bằng Node.js 22 (`npm ci` và `npm run build`). Job
+Docker khởi động cả API và frontend, sau đó kiểm tra `/health` và trang web.
+
 ## Mục 3 — Functional Requirements
 
 ### 3.1 Document Ingestion

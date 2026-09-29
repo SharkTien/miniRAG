@@ -1,4 +1,13 @@
 services:
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-4173}:80"
+    depends_on:
+      ntc_document_rag:
+        condition: service_started
+
   ntc_document_rag:
     build: .
     restart: unless-stopped

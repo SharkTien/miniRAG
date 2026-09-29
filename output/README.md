@@ -40,6 +40,7 @@ docker compose config --quiet: passed
 - [docker-compose.yml](../docker-compose.yml)
 - [.env.example](../.env.example)
 - [CI workflow](../.github/workflows/ci.yml)
+- [Frontend](../frontend/)
 - [Architecture source](../docs/architecture.md)
 - [Benchmark summary](../evaluation/benchmark_summary.md)
 

@@ -17,6 +17,7 @@
 | Không hard-code config business | `app/config/constants.py`, `app/config/settings.py`, `.env.example` | PASS |
 | Dockerfile, Compose, env template | Ba file deliverable ở root | PASS |
 | CI lint → test → Docker build | `.github/workflows/ci.yml`; local CI-equivalent đã chạy | PASS local; GitHub Actions chưa kích hoạt |
+| Frontend production build | `frontend/Dockerfile`, `frontend/package.json`, CI job `frontend` | Đã bổ sung; `npm run build` đạt |
 | Unit test | `tests/test_core_components.py`, test report: 19 passed | PASS |
 | API test | `tests/test_api.py`, test report: 19 passed | PASS |
 | Retrieval verification 5–10 câu | [retrieval_verification.csv](retrieval_verification.csv): 10/10 pass | PASS |
