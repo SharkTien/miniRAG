@@ -27,6 +27,10 @@ from app.repositories.chunk_repo import ChunkRepository
 # ─── PROGRESS TRACKING HOOK CHO DOCLING PIPELINE ────────────────────────────
 _docling_progress_local = threading.local()
 
+
+class DocumentCancelledError(Exception):
+    """Raised when a document is deleted while extraction is running."""
+
 def set_page_progress_callback(cb, total_pages=1):
     """Set page progress callback."""
     _docling_progress_local.cb = cb
@@ -57,6 +61,8 @@ class TrackedDoclingQueue:
                 try:
                     self._callback(self._completed, self._total_pages)
                 except Exception as exc:
+                    if isinstance(exc, DocumentCancelledError):
+                        raise
                     print(f"TrackedDoclingQueue callback error: {exc}", flush=True)
         return batch
 
@@ -536,6 +542,8 @@ class ExtractService:
 
                 def on_docling_page(done_pages, total):
                     """Run the on docling page operation."""
+                    if not self.repo.is_document_active(doc_id):
+                        raise DocumentCancelledError(f"Document {doc_id} was cancelled")
                     done = min(done_pages, total)
                     ratio = done / max(1, total)
                     # Tiến trình tăng dần từ 15% đến 60%
@@ -777,6 +785,14 @@ class ExtractService:
                 
             os.remove(tmp_name)
         except Exception as e:
+            if isinstance(e, DocumentCancelledError):
+                print(f"[{doc_id}] extraction cancelled", flush=True)
+                try:
+                    if 'tmp_name' in locals() and os.path.exists(tmp_name):
+                        os.remove(tmp_name)
+                except OSError:
+                    pass
+                return
             print(f"Error extracting {doc_id}: {e}")
             try:
                 if 'tmp_name' in locals() and os.path.exists(tmp_name):

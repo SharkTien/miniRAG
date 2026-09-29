@@ -102,6 +102,10 @@ class DocumentRepository:
                 
             docs = conn.execute(f"SELECT id, object_key FROM documents {where_clause}", params).fetchall()
             if docs:
+                conn.execute(
+                    f"UPDATE documents SET status = 'cancelled', error_message = %s {where_clause}",
+                    ("Đã hủy do tài liệu bị xóa", *params),
+                )
                 conn.execute(f"DELETE FROM documents {where_clause}", params)
             return docs
 

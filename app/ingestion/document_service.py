@@ -102,6 +102,12 @@ class DocumentService:
             raise HTTPException(404, "Tài liệu không tồn tại hoặc không có quyền")
             
         object_key = row[2] # based on SELECT *
+        # Mark the job cancelled before removing its row. The worker checks
+        # this state between extraction stages and stops cooperatively.
+        if row[5] in ("queued", "processing"):
+            self.repo.update_document_status(
+                doc_id, "cancelled", error_message="Đã hủy do tài liệu bị xóa"
+            )
         deleted = self.repo.delete_document(doc_id, actor)
         if not deleted:
             raise HTTPException(404, "Tài liệu không tồn tại hoặc không có quyền")
