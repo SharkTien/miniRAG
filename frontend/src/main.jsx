@@ -1013,6 +1013,17 @@ export default function App() {
       {/* Phết loang sáng theo con trỏ chuột */}
       <div className="ambient-mouse-glow" aria-hidden="true" />
 
+      {/* Theme control remains visible on the entry/login surface and in the app dock. */}
+      <button
+        type="button"
+        onClick={() => setIsDark(d => !d)}
+        className="absolute right-4 top-4 z-40 w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-primary)] bg-white/70 dark:bg-black/25 border border-black/10 dark:border-white/15 shadow-lg backdrop-blur-md hover:scale-105 transition"
+        title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+        aria-label={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+      >
+        <Icon name={isDark ? 'sun' : 'moon'} className="w-5 h-5" />
+      </button>
+
       <input
         type="file"
         ref={fileInputRef}
