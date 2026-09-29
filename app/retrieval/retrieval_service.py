@@ -52,3 +52,15 @@ class RetrievalService:
 
         logger.info("Truy vấn: '%s' -> Tìm thấy %d chunks phù hợp", query[:50], len(matched_chunks))
         return matched_chunks
+
+    def retrieve_exact(
+        self,
+        query: str,
+        top_k: int = TOP_K,
+        document_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve literal phrase matches without semantic broadening."""
+        if not query or not query.strip():
+            return []
+        doc_uuid = uuid.UUID(document_id) if document_id else None
+        return self.chunk_repo.exact_search(query.strip(), top_k=top_k, document_id=doc_uuid)

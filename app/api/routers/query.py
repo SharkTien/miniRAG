@@ -41,11 +41,14 @@ def query_documents(
         )
 
     try:
-        result = rag_service.answer_question(
-            question=payload.question,
-            top_k=payload.top_k or TOP_K,
-            document_id=payload.document_id,
-        )
+        query_kwargs = {
+            "question": payload.question,
+            "top_k": payload.top_k or TOP_K,
+            "document_id": payload.document_id,
+        }
+        if payload.document_ids:
+            query_kwargs["document_ids"] = payload.document_ids
+        result = rag_service.answer_question(**query_kwargs)
         return QueryResponse(**result)
     except Exception as exc:
         logger.error("Failed to process POST /query: %s", exc, exc_info=True)

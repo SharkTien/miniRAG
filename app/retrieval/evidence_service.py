@@ -63,6 +63,7 @@ class EvidenceAssessment:
     coverage_score: float
     missing_requirements: List[str]
     selected_chunk_ids: List[str]
+    requirement_evidence: Dict[str, List[str]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the value to dict."""
@@ -98,7 +99,10 @@ class EvidenceService:
     def assess(self, question: str, chunks: Sequence[Dict[str, Any]]) -> EvidenceAssessment:
         """Assess evidence quality and answerability."""
         if not chunks:
-            return EvidenceAssessment("IRRELEVANT", "INSUFFICIENT", "CONSISTENT", False, 0.0, 0.0, _phrases(question), [])
+            return EvidenceAssessment(
+                "IRRELEVANT", "INSUFFICIENT", "CONSISTENT", False, 0.0, 0.0,
+                _phrases(question), [], {},
+            )
 
         q_tokens = set(_tokens(question))
         q_phrases = _phrases(question)
@@ -111,11 +115,23 @@ class EvidenceService:
         # terms occur in the evidence.  Similarity alone cannot cover it.
         covered: List[str] = []
         missing: List[str] = []
+        requirement_evidence: Dict[str, List[str]] = {}
         for phrase in q_phrases:
             p_tokens = set(_tokens(phrase))
             phrase_hit = phrase in joined_folded
             token_hit = len(p_tokens & set(_tokens(joined))) / max(1, len(p_tokens)) >= 0.6
-            (covered if phrase_hit or token_hit else missing).append(phrase)
+            matching_ids = [
+                str(chunk.get("chunk_id") or "")
+                for chunk in chunks
+                if phrase in _fold(chunk.get("content") or "")
+                or len(p_tokens & set(_tokens(chunk.get("content") or ""))) / max(1, len(p_tokens)) >= 0.6
+            ]
+            if phrase_hit or token_hit:
+                covered.append(phrase)
+                requirement_evidence[phrase] = [value for value in matching_ids if value]
+            else:
+                missing.append(phrase)
+                requirement_evidence[phrase] = []
 
         coverage_score = len(covered) / max(1, len(q_phrases))
 
@@ -146,6 +162,12 @@ class EvidenceService:
             semantic_coverage = min(1.0, 0.35 + (best_dense_score * 0.65))
             coverage_score = max(coverage_score, semantic_coverage)
             missing = []
+            # Semantic support is still tied to the strongest retrieved
+            # chunks, rather than being returned as an untraceable score.
+            requirement_evidence = {
+                phrase: [str(chunk.get("chunk_id") or "") for chunk in relevant_chunks if chunk.get("chunk_id")]
+                for phrase in q_phrases
+            }
 
         if not relevant_chunks or overlap < 0.08:
             relevance = "IRRELEVANT"
@@ -169,5 +191,5 @@ class EvidenceService:
         return EvidenceAssessment(
             relevance, coverage, consistency, answerability,
             round(overlap, 4), round(coverage_score, 4),
-            list(dict.fromkeys(missing)), selected_ids,
+            list(dict.fromkeys(missing)), selected_ids, requirement_evidence,
         )

@@ -131,7 +131,6 @@ class ChunkRepository:
                 if document_id:
                     hybrid_where_clauses.append("c.document_id = %s")
                     hybrid_where_params.append(document_id)
-
                 hybrid_where_sql = " AND ".join(hybrid_where_clauses)
                 text_clean = query_text.strip()
 
@@ -149,7 +148,7 @@ class ChunkRepository:
                                ts_rank_cd(to_tsvector('simple', c.content), plainto_tsquery('simple', %s)) AS text_score,
                                ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('simple', c.content), plainto_tsquery('simple', %s)) DESC) AS rnk
                         FROM document_chunks c
-                        WHERE to_tsvector('simple', c.content) @@ plainto_tsquery('simple', %s)
+                    WHERE to_tsvector('simple', c.content) @@ plainto_tsquery('simple', %s)
                               {"AND c.document_id = %s" if document_id else ""}
                         LIMIT 50
                     )
@@ -168,7 +167,10 @@ class ChunkRepository:
                     LEFT JOIN vector_ranked vr ON c.id = vr.id
                     LEFT JOIN text_ranked tr ON c.id = tr.id
                     WHERE (vr.id IS NOT NULL OR tr.id IS NOT NULL)
-                    ORDER BY rrf_score DESC, similarity_score DESC
+                    -- The selected dense alias is ``dense_score``.  Using the
+                    -- old ``similarity_score`` name raised an SQL error and
+                    -- silently disabled hybrid retrieval via the fallback.
+                    ORDER BY rrf_score DESC, dense_score DESC
                     LIMIT %s
                 """
                 hybrid_params = [
@@ -210,6 +212,7 @@ class ChunkRepository:
                                     "similarity_score": round(score, 4),
                                     "dense_score": round(float(row[6] or 0.0), 4),
                                     "bm25_score": round(bm25, 4),
+                                    "retrieval_method": "hybrid",
                                     "retrieval_score_cutoff": round(score_cutoff, 4),
                                 })
                         if results:
@@ -224,7 +227,6 @@ class ChunkRepository:
         if document_id:
             where_clauses.append("c.document_id = %s")
             where_params.append(document_id)
-
         where_sql = " AND ".join(where_clauses)
         params: List[Any] = [vec_str, *where_params, vec_str, top_k]
 
@@ -259,6 +261,9 @@ class ChunkRepository:
                             "metadata": row[4] or {},
                             "file_name": row[5],
                             "similarity_score": round(score, 4),
+                            "dense_score": round(score, 4),
+                            "bm25_score": 0.0,
+                            "retrieval_method": "dense",
                         })
             except Exception as exc:
                 logger.error("Lỗi khi thực hiện vector_search: %s", exc)
@@ -282,9 +287,56 @@ class ChunkRepository:
                         "metadata": row[4] or {},
                         "file_name": row[5],
                         "similarity_score": 0.5,
+                        "dense_score": 0.5,
+                        "bm25_score": 0.0,
+                        "retrieval_method": "text_fallback",
                     })
 
         return results
+
+    def exact_search(
+        self,
+        query_text: str,
+        top_k: int = TOP_K,
+        document_id: Optional[uuid.UUID] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return chunks containing an exact phrase before semantic broadening."""
+        phrase = re.sub(r"\s+", " ", (query_text or "").strip())
+        if not phrase:
+            return []
+        escaped_phrase = phrase.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where = ["c.content ILIKE %s ESCAPE '\\'"]
+        params: list[Any] = [f"%{escaped_phrase}%"]
+        if document_id:
+            where.append("c.document_id = %s")
+            params.append(document_id)
+        params.append(top_k)
+        sql = f"""
+            SELECT c.id, c.document_id, c.chunk_index, c.content, c.metadata,
+                   d.original_filename
+            FROM document_chunks c
+            JOIN documents d ON c.document_id = d.id
+            WHERE {' AND '.join(where)}
+            ORDER BY c.chunk_index ASC
+            LIMIT %s
+        """
+        with self.db.connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            {
+                "chunk_id": str(row[0]),
+                "document_id": str(row[1]),
+                "chunk_index": row[2],
+                "content": row[3],
+                "metadata": row[4] or {},
+                "file_name": row[5],
+                "similarity_score": 1.0,
+                "dense_score": 0.0,
+                "bm25_score": 1.0,
+                "retrieval_method": "exact",
+            }
+            for row in rows
+        ]
 
     def get_chunks_by_document(self, document_id: uuid.UUID) -> List[Dict[str, Any]]:
         """Return all chunks belonging to a document."""

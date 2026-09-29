@@ -23,7 +23,7 @@ Client
   │                                  ▼
   │                       PostgreSQL + pgvector
   │
-  └── POST /query ──► query embedding → hybrid vector/text retrieval
+  └── POST /query ──► query planning → scoped exact/hybrid retrieval
                                   │
                                   ▼
                          evidence rerank and gating
@@ -51,13 +51,23 @@ Client
 
 ## Retrieval and answer flow
 
-`RetrievalService` embeds the question and calls `ChunkRepository`. PostgreSQL
-combines cosine similarity with simple full-text ranking when query text is
-available. Results are then scored by `EvidenceService`, which checks lexical
-coverage and answerability from chunk content. `RagService` limits the prompt
-to the selected evidence, sends at most one image to the configured vision
-endpoint, and returns citations containing filename, chunk id, page and
-snippet.
+`RagService` first creates a deterministic query plan. The plan identifies
+exact, structured, comparison or broad-scope questions and creates at most one
+normalized lexical variant. A request may also provide multiple document ids;
+each document is searched independently so one large file cannot consume the
+whole result set.
+
+`RetrievalService` embeds each query and calls `ChunkRepository`. PostgreSQL
+combines cosine similarity with full-text ranking, followed by a dependency-free
+BM25 pass over the candidate pool. Exact phrase questions also have a literal
+`ILIKE` retrieval path before semantic broadening. Results expose the dense and
+BM25 scores and the actual retrieval method.
+
+`EvidenceService` reranks the candidates, checks content coverage and records
+which chunk supports each extracted question requirement. `RagService` limits
+the prompt to the selected evidence, sends at most one image to the configured
+vision endpoint, and returns citations containing filename, document id, chunk,
+page, element ids, extraction method and retrieval scores where available.
 
 The query endpoint is available at `POST /query`; `/api/query` is kept as a
 compatibility alias. Document endpoints are available at both `/documents`
@@ -99,7 +109,10 @@ DeepDoc parser.
   configured.
 - Page snapshots improve visual questions but increase object-storage use; set
   `PERSIST_PAGE_VISUALS=false` when storage is constrained.
-- The current reranker is lexical and rule based. A cross-encoder or learned
-  reranker can improve recall after collecting production feedback.
+- The current query planner and reranker are deterministic and rule based. A
+  cross-encoder or learned reranker can improve recall after collecting
+  production feedback.
+- Version/effective-date resolution, typed facts for numeric tables and
+  checkpoint-based exhaustive search are still future work.
 - Human review, feedback capture and a larger regression set should be added
   before using answers for high-impact decisions.

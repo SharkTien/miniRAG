@@ -27,6 +27,7 @@ from app.config.settings import (
 )
 from app.config.prompts import CHITCHAT_SYSTEM_PROMPT, GROUNDED_QA_SYSTEM_PROMPT
 from app.retrieval.evidence_service import EvidenceService
+from app.retrieval.query_planner import QueryPlanner
 
 if TYPE_CHECKING:
     from app.retrieval.retrieval_service import RetrievalService
@@ -83,6 +84,7 @@ class RagService:
         self.base_url = (base_url or NIM_BASE_URL or "https://integrate.api.nvidia.com/v1").rstrip("/")
         self.model = model or LLM_MODEL
         self.evidence = EvidenceService()
+        self.query_planner = QueryPlanner()
 
     # ── Guardrail helper ───────────────────────────────────────────────────────
     def _is_chitchat(self, question: str) -> bool:
@@ -150,6 +152,7 @@ class RagService:
         question: str,
         top_k: int = TOP_K,
         document_id: Optional[str] = None,
+        document_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Execute the end-to-end RAG flow.
@@ -176,17 +179,63 @@ class RagService:
                 "execution_time_seconds": round(time.time() - t0, 2),
             }
 
+        # Classify the request and produce a small lexical variant.  The
+        # original wording remains the primary query; the normalized variant
+        # helps BM25 match natural Vietnamese phrasing without relying on an
+        # LLM or a hand-written list of answer concepts.
+        query_plan = self.query_planner.plan(q)
+
         # 1. Retrieval
         # Retrieve a wider candidate pool, then rerank and trim to the context
         # budget. Fetching only top_k here made the reranker unable to recover
         # relevant passages ranked just below the vector-search cutoff.
         final_k = max(1, min(int(top_k or TOP_K), 8))
         candidate_k = min(80, max(final_k * RETRIEVAL_CANDIDATE_MULTIPLIER, 16))
-        raw_chunks = self.retriever.retrieve(
-            query=q,
-            top_k=candidate_k,
-            document_id=document_id,
-        )
+        scope_ids: list[str] = []
+        for value in [document_id, *(document_ids or [])]:
+            if value and value not in scope_ids:
+                scope_ids.append(value)
+
+        raw_chunks: list[Dict[str, Any]] = []
+        retrieval_queries = query_plan.query_variants or [q]
+        # Search each requested document independently so one large document
+        # cannot consume the entire top-k budget of a multi-document request.
+        retrieval_scopes: list[Optional[str]] = scope_ids or [None]
+        for scope_id in retrieval_scopes:
+            if query_plan.exact_lookup:
+                exact_retrieve = getattr(self.retriever, "retrieve_exact", None)
+                if callable(exact_retrieve):
+                    raw_chunks.extend(
+                        dict(chunk)
+                        for chunk in exact_retrieve(
+                            query=query_plan.exact_query or query_plan.normalized_query,
+                            top_k=final_k,
+                            document_id=scope_id,
+                        )
+                    )
+            for retrieval_query in retrieval_queries:
+                retrieved = self.retriever.retrieve(
+                    query=retrieval_query,
+                    top_k=candidate_k,
+                    document_id=scope_id,
+                )
+                for chunk in retrieved:
+                    item = dict(chunk)
+                    item["retrieval_query"] = retrieval_query
+                    raw_chunks.append(item)
+
+        retrieved_doc_ids = sorted({
+            str(chunk.get("document_id"))
+            for chunk in raw_chunks
+            if chunk.get("document_id")
+        })
+        retrieval_scope = {
+            "mode": "explicit_documents" if scope_ids else "corpus_candidate_pool",
+            "requested_document_count": len(scope_ids),
+            "retrieved_document_count": len(retrieved_doc_ids),
+            "retrieved_document_ids": retrieved_doc_ids,
+            "coverage": "top_k_candidates",
+        }
 
         # Content-only evidence gate.  Retrieval may return related-looking
         # chunks, but generation is allowed only when the content itself is
@@ -224,6 +273,10 @@ class RagService:
                 "retrieved_chunks": matched_chunks,
                 "evidence": evidence_state.to_dict(),
                 "decision": decision,
+                "query_plan": query_plan.to_dict(),
+                "retrieval_queries": retrieval_queries,
+                "scope_document_ids": scope_ids,
+                "retrieval_scope": retrieval_scope,
                 "execution_time_seconds": round(time.time() - t0, 2),
             }
 
@@ -231,6 +284,10 @@ class RagService:
             return {
                 "answer": "Không tìm thấy thông tin hoặc tài liệu nào liên quan trong cơ sở dữ liệu để trả lời câu hỏi của bạn.",
                 "sources": [],
+                "query_plan": query_plan.to_dict(),
+                "retrieval_queries": retrieval_queries,
+                "scope_document_ids": scope_ids,
+                "retrieval_scope": retrieval_scope,
                 "execution_time_seconds": round(time.time() - t0, 2),
             }
 
@@ -241,6 +298,10 @@ class RagService:
             return {
                 "answer": "Không tìm thấy thông tin hoặc tài liệu nào liên quan trong cơ sở dữ liệu để trả lời câu hỏi của bạn.",
                 "sources": [],
+                "query_plan": query_plan.to_dict(),
+                "retrieval_queries": retrieval_queries,
+                "scope_document_ids": scope_ids,
+                "retrieval_scope": retrieval_scope,
                 "execution_time_seconds": round(time.time() - t0, 2),
             }
 
@@ -256,12 +317,15 @@ class RagService:
             chunk_id = chunk.get("chunk_id", f"chunk_{idx+1}")
             score = chunk.get("similarity_score", 0.0)
             content = chunk.get("content", "").strip()
+            element_ids = meta.get("element_ids") or []
+            if not isinstance(element_ids, list):
+                element_ids = [str(element_ids)]
             # Khắc phục lỗi rớt/đứt từ do phân mảnh chunk biên (Chunk boundary clipping)
             content = re.sub(r'lao động yết\b', 'lao động và niêm yết', content)
             content = re.sub(r'xác nhận và niêm\s*$', 'xác nhận: ', content)
 
             context_blocks.append(
-                f"[EVIDENCE #{idx+1} | Trang: {page}]\n{content}"
+                f"[EVIDENCE #{idx+1} | File: {file_name} | Chunk: {chunk_id} | Trang: {page}]\n{content}"
             )
             sources.append({
                 "document_id": doc_id,
@@ -269,6 +333,16 @@ class RagService:
                 "chunk_id": chunk_id,
                 "page": page,
                 "similarity_score": score,
+                "dense_score": chunk.get("dense_score"),
+                "bm25_score": chunk.get("bm25_score"),
+                "retrieval_method": chunk.get("retrieval_method"),
+                "source_locator": meta.get("locator") or meta.get("source_locator"),
+                "element_ids": element_ids,
+                "section": meta.get("section"),
+                "extraction_method": meta.get("extraction_method") or meta.get("source"),
+                "ocr_confidence": meta.get("ocr_confidence"),
+                "page_start": meta.get("page_start"),
+                "page_end": meta.get("page_end"),
                 "snippet": content[:150].replace("\n", " ") + ("..." if len(content) > 150 else ""),
             })
 
@@ -328,6 +402,10 @@ class RagService:
             "retrieved_chunks": matched_chunks,
             "evidence": evidence_state.to_dict(),
             "decision": "ANSWER",
+            "query_plan": query_plan.to_dict(),
+            "retrieval_queries": retrieval_queries,
+            "scope_document_ids": scope_ids,
+            "retrieval_scope": retrieval_scope,
             "execution_time_seconds": elapsed,
         }
 

@@ -756,6 +756,16 @@ class ExtractService:
                             "section": chunk_meta.get("section", ""),
                             "page_start": chunk_meta.get("page_start"),
                             "page_end": chunk_meta.get("page_end"),
+                            "extraction_method": parser_used,
+                            "ocr_confidence": (
+                                round(float(ocr_confidence), 4)
+                                if ocr_confidence is not None else None
+                            ),
+                            "source_locator": (
+                                f"{original_filename}#page={chunk_meta.get('page_start')}"
+                                if chunk_meta.get("page_start") is not None
+                                else original_filename
+                            ),
                         },
                         "embedding": vec,
                     })

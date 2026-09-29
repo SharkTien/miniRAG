@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,7 @@ class SendMessageRequest(BaseModel):
     question: str = Field(..., description="Question to answer")
     top_k: Optional[int] = Field(default=TOP_K, ge=1, le=20, description="Maximum number of retrieved chunks")
     document_id: Optional[str] = Field(default=None, description="Optional document scope")
+    document_ids: Optional[List[str]] = Field(default=None, description="Optional multi-document scope")
 
 @router.get("", summary="List conversations")
 def list_conversations(
@@ -123,11 +124,14 @@ def send_message_in_conversation(
 
     # 2. Run hybrid retrieval and LLM synthesis.
     try:
-        rag_res = rag_service.answer_question(
-            question=query_text,
-            top_k=payload.top_k or TOP_K,
-            document_id=payload.document_id
-        )
+        query_kwargs = {
+            "question": query_text,
+            "top_k": payload.top_k or TOP_K,
+            "document_id": payload.document_id,
+        }
+        if payload.document_ids:
+            query_kwargs["document_ids"] = payload.document_ids
+        rag_res = rag_service.answer_question(**query_kwargs)
         answer_text = rag_res.get("answer", "")
         sources = rag_res.get("sources", [])
         retrieved_chunks = rag_res.get("retrieved_chunks", [])
