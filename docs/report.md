@@ -63,18 +63,28 @@ Assertion pass: 23.72%
 Visual crop có hiệu quả khi được biến thành retrieval item độc lập:
 
 Trước: 20 retrieval hits, 11 assertion pass
-Sau:   34 retrieval hits, 19 assertion pass
+Sau:   34/159 content hits, 19/159 assertion pass (11,95%)
 
 ### Annotation
 
-Visual crop hiện tại chưa đại diện đúng cho:
+Đã thử ba hướng xử lý:
+
+1. Gắn visual crop vào page chunk: không đủ để truy xuất đúng vùng chú thích.
+2. OCR tile cố định: đạt 92/285 content hits, thấp hơn cách lấy native/page context.
+3. Document-scoped retrieval kết hợp native crop và page snapshot: đạt
+   117/285 content hits và 45/279 assertion pass (15,79%), tăng 11 câu pass
+   so với tuyến annotation trước đó.
+
+Các trường hợp vẫn khó:
 
 Callout box
 Highlight màu
 Colored table
 Bố cục cần đếm dòng/cột
 
-OCR tile làm giảm điểm, nên chưa bật cho annotation.
+Page snapshot đã được chuẩn bị làm bằng chứng cho bước sinh câu trả lời, nhưng
+một số lần chạy generation bị timeout. Vì vậy chưa dùng kết quả page snapshot
+để tuyên bố một điểm tổng hợp mới.
 
 ## Hướng thay thế tiếp theo
 
@@ -82,13 +92,14 @@ Giữ cấu hình hybrid + OCR + table cho production.
 
 Giữ visual-element OCR cho figure.
 
-Với annotation, phát triển detector dựa trên:
+Với annotation, hướng tiếp theo là phát triển detector dựa trên:
 Màu nền và vùng highlight.
 Đường viền/callout.
 Geometry của vùng bảng.
 Quan hệ giữa text và vùng đánh dấu.
 
-Dùng page snapshot làm fallback generation sau khi retrieval chọn đúng trang.
+Dùng page snapshot làm fallback generation sau khi retrieval chọn đúng trang,
+đồng thời giới hạn kích thước ảnh và thời gian gọi mô hình để tránh timeout.
 
 Re-ingest tài liệu để lưu đầy đủ crop, bbox và metadata mới.
 
@@ -114,4 +125,5 @@ Backend production vẫn chưa tương đương hoàn toàn với benchmark ở 
 Vì vậy các chỉ số `90.65%`, `41.33%` và `23.72%` là kết quả của cấu hình
 benchmark có dữ liệu bổ sung; không nên ghi là điểm đã được xác nhận trực tiếp
 trên mọi tài liệu upload production. Cần re-ingest một bộ tài liệu production
-và benchmark lại sau khi triển khai hai nhánh visual/annotation độc lập.
+và benchmark lại sau khi triển khai hai nhánh visual/annotation độc lập. Hiện
+chưa có điểm production mới thay thế cho kết quả SynthDocQA này.
