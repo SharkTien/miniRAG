@@ -413,6 +413,33 @@ class ExtractService:
             do_ocr = False
             page_count = 1
             ocr_confidence = None
+            image_bboxes = []
+            ocr_bboxes = []
+
+            # Plain-text uploads do not need a PDF layout engine. Reading them
+            # directly preserves the original line order and avoids sending a
+            # TXT/CSV/Markdown file through Docling's PDF converter.
+            if source_suffix in {".txt", ".csv", ".markdown"}:
+                raw_text = Path(tmp_name).read_text(encoding="utf-8", errors="replace")
+                clean_text = self._normalizer.clean_text(raw_text)
+                normalized_elements = []
+                for index, line in enumerate(clean_text.splitlines()):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    normalized_elements.append({
+                        "element_id": f"#/text/{index}",
+                        "text": line,
+                        "page": 1,
+                        "bbox": None,
+                        "coord_origin": None,
+                        "element_type": "paragraph",
+                        "metadata": {},
+                    })
+                doc_json = {"texts": [], "tables": []}
+                parser_used = "plain_text"
+                extraction_complete = True
+                self.repo.update_progress(doc_id, 68, "Đã đọc xong tệp văn bản")
 
             # Auto mode mirrors the upstream parser guidance: do not OCR a PDF
             # that already has a usable text layer; use the Vietnamese GPU OCR

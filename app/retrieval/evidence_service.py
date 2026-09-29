@@ -30,7 +30,7 @@ _ANSWER_TERMS = {
     "lương", "tiền", "mức", "tính", "trả", "thanh toán", "hưởng", "được hưởng",
     "điều kiện", "thời hạn", "thời gian", "quy trình", "hồ sơ", "phê duyệt",
     "nghỉ", "ngày", "giờ", "tỷ lệ", "phụ cấp", "trợ cấp", "đăng ký",
-    "amount", "price", "cost", "total", "date", "time", "rate", "number",
+    "giá", "amount", "price", "cost", "total", "date", "time", "rate", "number",
     "name", "address", "condition", "deadline", "period", "process", "form",
     "approved", "approval", "leave", "hours", "salary", "payment", "paid",
 }
