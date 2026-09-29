@@ -26,24 +26,6 @@ _STOPWORDS = {
     "please", "tell", "me", "about", "this", "that", "these", "those",
 }
 
-_ANSWER_TERMS = {
-    "lương", "tiền", "mức", "tính", "trả", "thanh toán", "hưởng", "được hưởng",
-    "điều kiện", "thời hạn", "thời gian", "quy trình", "hồ sơ", "phê duyệt",
-    "nghỉ", "ngày", "giờ", "tỷ lệ", "phụ cấp", "trợ cấp", "đăng ký",
-    "giá", "amount", "price", "cost", "total", "date", "time", "rate", "number",
-    "name", "address", "condition", "deadline", "period", "process", "form",
-    "approved", "approval", "leave", "hours", "salary", "payment", "paid",
-}
-
-_GENERIC_QUERY_TERMS = {
-    "giá", "dịch", "vụ", "thông", "tin", "nội", "dung", "như", "nào",
-}
-_MONEY_PATTERN = re.compile(
-    r"\b\d[\d\s.,]*\s*(?:đ|đồng|vnđ|vnd)\b|\btổng\s+cộng\b",
-    re.IGNORECASE | re.UNICODE,
-)
-
-
 def _fold(text: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFC", text or "").lower()).strip()
 
@@ -130,27 +112,47 @@ class EvidenceService:
         covered: List[str] = []
         missing: List[str] = []
         for phrase in q_phrases:
-            p_tokens = set(_tokens(phrase)) - _GENERIC_QUERY_TERMS
+            p_tokens = set(_tokens(phrase))
             phrase_hit = phrase in joined_folded
             token_hit = len(p_tokens & set(_tokens(joined))) / max(1, len(p_tokens)) >= 0.6
             (covered if phrase_hit or token_hit else missing).append(phrase)
 
-        asked_answer_dimension = _contains_any(question, _ANSWER_TERMS)
-        answer_dimension_present = (
-            _contains_any(joined, _ANSWER_TERMS)
-            or bool(_MONEY_PATTERN.search(joined))
-        )
         coverage_score = len(covered) / max(1, len(q_phrases))
-        if asked_answer_dimension and not answer_dimension_present:
-            coverage_score *= 0.35
-            missing.append("nội dung trả lời trực tiếp cho yêu cầu của câu hỏi")
+
+        # Do not maintain a hand-written list of answer concepts (price,
+        # service, salary, and so on). Dense retrieval already measures the
+        # relationship between the question and the evidence. When the model
+        # finds a strong semantic match but the wording differs, use that
+        # signal to avoid rejecting a valid answer because of missing literal
+        # words.
+        best_dense_score = max(
+            (float(chunk.get("similarity_score") or 0.0) for chunk in chunks),
+            default=0.0,
+        )
+        lexical_token_overlap = len(q_tokens & set(_tokens(joined))) / max(1, len(q_tokens))
+        # A long token shared by the question and evidence is a language-
+        # independent anchor (brand, product, code, or named entity). It lets
+        # semantic retrieval bridge descriptive wording without a vocabulary
+        # list maintained by the application.
+        shared_long_anchor = any(
+            len(token) >= 5 and token in set(_tokens(joined))
+            for token in q_tokens
+        )
+        if (
+            relevant_chunks
+            and best_dense_score >= 0.65
+            and (lexical_token_overlap >= 0.50 or shared_long_anchor)
+        ):
+            semantic_coverage = min(1.0, 0.35 + (best_dense_score * 0.65))
+            coverage_score = max(coverage_score, semantic_coverage)
+            missing = []
 
         if not relevant_chunks or overlap < 0.08:
             relevance = "IRRELEVANT"
         else:
             relevance = "RELEVANT"
 
-        if coverage_score >= 0.70 and (not asked_answer_dimension or answer_dimension_present):
+        if coverage_score >= 0.70:
             coverage = "SUFFICIENT"
         elif coverage_score > 0.0:
             coverage = "PARTIAL"
