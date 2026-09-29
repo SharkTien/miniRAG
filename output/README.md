@@ -17,10 +17,11 @@ Question → hybrid retrieval → evidence gate → grounded LLM → answer + so
 Kết quả kiểm tra tại thời điểm đóng gói:
 
 ```text
-19 tests passed
+22 tests passed
 ruff E9: All checks passed
 compileall: passed
 docker compose config --quiet: passed
+frontend npm run build: passed
 ```
 
 ## Hồ sơ trong thư mục này
@@ -52,10 +53,14 @@ cp .env.example .env
 docker compose up -d --build
 curl -fsS http://localhost:41873/health
 PYTHONPATH=. pytest -q tests
+npm --prefix frontend ci
+npm --prefix frontend run build
 ```
 
 API không yêu cầu đăng nhập. Upload tạo trạng thái `queued`; worker xử lý
 ingestion và query chỉ nên chạy sau khi document chuyển sang `processed`.
+Frontend production được phục vụ qua Nginx tại cổng `FRONTEND_PORT` (mặc định
+`4173`) và chuyển tiếp API tới backend.
 
 Demo hoàn chỉnh với file và câu hỏi tự chọn:
 

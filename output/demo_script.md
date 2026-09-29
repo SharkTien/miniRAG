@@ -57,8 +57,8 @@ python -m compileall -q app tests
 docker compose config --quiet
 ```
 
-Mở `.github/workflows/ci.yml` để chỉ ra thứ tự lint → unit/API test → Docker
-build và điều kiện Docker job phụ thuộc quality job.
+Mở `.github/workflows/ci.yml` để chỉ ra thứ tự lint → unit/API test → frontend
+build → Docker build và smoke test API/frontend.
 
 ## 7. Retrieval verification — 3 phút
 

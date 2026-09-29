@@ -10,7 +10,9 @@ Ngày ghi nhận: `2026-09-28`.
 | Unit + API + OCR/evidence tests | `PYTHONPATH=. pytest -q tests` | PASS — 22 passed |
 | Ruff critical syntax checks | `ruff check app tests --select E9` | PASS — All checks passed |
 | Compose schema/interpolation | `docker compose config --quiet` | PASS |
-| Compose smoke run | `docker compose up -d` + `GET /health` + teardown | PASS — local CI-equivalent run |
+| Frontend build | `npm ci` + `npm run build` trong `frontend/` | PASS |
+| Frontend Docker image | `docker build -t mini-rag-frontend:ci frontend` | PASS |
+| Compose smoke run | API `/health` + frontend `/` + teardown | PASS — API/frontend CI-equivalent run |
 | Retrieval verification | `retrieval_verification.csv` | PASS — 10/10 |
 | Repository quality gate | `python tools/quality_gate.py` | PASS — 100/100 |
 
@@ -34,8 +36,7 @@ Ngày ghi nhận: `2026-09-28`.
 Lần chạy ban đầu thiếu `pytest`, `ruff` và một số runtime dependency trong
 Python host. Đã cài đúng `requirements-dev.txt` cùng các dependency runtime
 cần cho test; không sửa source code để làm test pass. CI thực hiện cả việc tạo
-CI được cấu hình để tạo Docker image, chạy smoke test bằng Docker Compose, gọi
-`/health` rồi dọn các container và volume tạm. Đã chạy đầy đủ chuỗi tương đương
-trên máy hiện tại: image build thành công, PostgreSQL healthy, API trả
-`{"status":"ok"}`, và container/volume đã được dọn sau test. GitHub Actions
-chưa được kích hoạt từ phiên làm việc này vì chưa push commit lên remote.
+CI được cấu hình để tạo API và frontend image, chạy smoke test bằng Docker
+Compose, gọi `/health` và trang frontend rồi dọn container/volume. Chuỗi tương
+đương đã được kiểm tra cục bộ; GitHub Actions đã được kích hoạt cho các commit
+trên nhánh `main` và đang chạy các workflow mới nhất.

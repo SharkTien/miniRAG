@@ -2,7 +2,7 @@
 
 | Yêu cầu trong `SUBJECT.md` | Bằng chứng | Trạng thái |
 |---|---|---|
-| Docker Compose khởi chạy service | `docker-compose.yml`, `Dockerfile`; Compose config và smoke test `/health` đã thêm vào CI | Đã bổ sung |
+| Docker Compose khởi chạy service | `docker-compose.yml`, API/frontend Dockerfile; Compose config và smoke test API/frontend | PASS local |
 | Upload PDF, TXT, DOCX | `app/config/settings.py` (`ALLOWED_EXTENSIONS`), `app/api/routers/documents.py` | PASS |
 | Extract và clean dữ liệu | `app/ingestion/extract_service.py`, `app/ingestion/normalize_service.py` | PASS |
 | Chunk dữ liệu | `NormalizeService.chunk_elements`; unit test trong `tests/test_core_components.py` | PASS |
@@ -16,7 +16,7 @@
 | Prompt policy tách khỏi business logic | `app/config/prompts.py`; prompt version `rag-grounded-v1` | PASS |
 | Không hard-code config business | `app/config/constants.py`, `app/config/settings.py`, `.env.example` | PASS |
 | Dockerfile, Compose, env template | Ba file deliverable ở root | PASS |
-| CI lint → test → Docker build | `.github/workflows/ci.yml`; local CI-equivalent đã chạy | PASS local; GitHub Actions chưa kích hoạt |
+| CI lint → test → Docker build | `.github/workflows/ci.yml`; local CI-equivalent đã chạy | PASS local; runner GitHub đang chạy commit mới |
 | Frontend production build | `frontend/Dockerfile`, `frontend/package.json`, CI job `frontend` | Đã bổ sung; `npm run build` đạt |
 | Unit test | `tests/test_core_components.py`, test report: 22 passed | PASS |
 | API test | `tests/test_api.py`: health, upload hợp lệ/không hỗ trợ, query hợp lệ/rỗng/không có dữ liệu | PASS |
