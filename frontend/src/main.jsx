@@ -528,9 +528,6 @@ export default function App() {
     setChatSidebarOpen(true)
   }
 
-  // Authenticated User
-  const [currentUser, setCurrentUser] = useState('admin')
-
   // Ambient Mouse Follower Glow (Phet loang sang theo con tro chuot)
   useEffect(() => {
     let rafId
@@ -593,43 +590,6 @@ export default function App() {
     }
   }, [])
 
-  // Authentication & Session
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/auth/me')
-      if (res.ok) {
-        const data = await res.json()
-        setCurrentUser(data.username || data.user || 'admin')
-      } else {
-        autoLogin()
-      }
-    } catch {
-      autoLogin()
-    }
-  }
-
-  const autoLogin = async () => {
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'admin', password: 'matkhausieudai123' })
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setCurrentUser(data.username || 'admin')
-        if (data.csrf_token) {
-          localStorage.setItem('csrf_token', data.csrf_token)
-        }
-        fetchDocuments()
-        fetchConversations()
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
   // Fetch Real Documents
   const fetchDocuments = async () => {
     try {
@@ -665,7 +625,6 @@ export default function App() {
   }, [documents])
 
   useEffect(() => {
-    checkAuth()
     fetchDocuments()
     fetchConversations()
   }, [])
@@ -849,11 +808,7 @@ export default function App() {
     if (!window.confirm('Bạn có chắc muốn xóa tài liệu này khỏi hệ thống?')) return
     try {
       const res = await fetch(`/api/documents/${docId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          'X-CSRF-Token': localStorage.getItem('csrf_token') || ''
-        }
+        method: 'DELETE'
       })
       if (res.ok) {
         setDocuments(prev => prev.filter(d => d.id !== docId))
@@ -1076,9 +1031,9 @@ export default function App() {
           {/* User Avatar Portrait */}
           <div
             className="w-9 h-9 rounded-full overflow-hidden border border-black/10 dark:border-white/20 shadow-xs flex items-center justify-center bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 text-white font-bold text-xs shrink-0 cursor-pointer"
-            title={`Người dùng: ${currentUser}`}
+            title="Mini RAG"
           >
-            {currentUser.slice(0, 2).toUpperCase()}
+            RG
           </div>
         </div>
       </aside>
