@@ -1,15 +1,17 @@
 from psycopg.types.json import Jsonb
-from app.core.database import DatabaseManager
+from app.config.database import DatabaseManager
 
 class DocumentRepository:
+    """Provide the documentrepository application component."""
     def __init__(self, db: DatabaseManager):
         self.db = db
 
-    def get_documents_by_filter(self, filter_type: str, user: str, limit: int, offset: int):
+    def get_documents_by_filter(self, filter_type: str, actor: str, limit: int, offset: int):
+        """Return documents by filter."""
         with self.db.connect() as conn:
             if filter_type in ('mine', 'all'):
                 where_clause = "WHERE uploaded_by = %s"
-                params = (user, limit, offset)
+                params = (actor, limit, offset)
             elif filter_type == 'shared':
                 # There is no document-sharing ACL yet; never expose other users' metadata.
                 where_clause = "WHERE 1 = 0"
@@ -30,14 +32,16 @@ class DocumentRepository:
             
         return docs, count
 
-    def create_document(self, doc_id, filename, object_key, content_type, size, user, sha256):
+    def create_document(self, doc_id, filename, object_key, content_type, size, actor, sha256):
+        """Create document."""
         with self.db.connect() as conn:
             conn.execute(
                 "INSERT INTO documents (id, original_filename, object_key, content_type, size_bytes, uploaded_by, sha256) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (doc_id, filename, object_key, content_type, size, user, sha256)
+                (doc_id, filename, object_key, content_type, size, actor, sha256)
             )
 
     def get_next_queued_document(self):
+        """Return next queued document."""
         with self.db.connect() as conn:
             row = conn.execute(
                 "SELECT id FROM documents WHERE status = 'queued' ORDER BY created_at LIMIT 1"
@@ -47,29 +51,33 @@ class DocumentRepository:
             conn.execute("UPDATE documents SET status = 'processing', progress = 0, progress_stage = 'Bat dau xu ly' WHERE id = %s", (row[0],))
             return row[0]
 
-    def get_document(self, doc_id, user=None):
+    def get_document(self, doc_id, actor=None):
+        """Return document."""
         with self.db.connect() as conn:
-            if user and user != 'admin':
-                return conn.execute("SELECT * FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, user)).fetchone()
+            if actor and actor != 'system':
+                return conn.execute("SELECT * FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, actor)).fetchone()
             return conn.execute("SELECT * FROM documents WHERE id = %s", (doc_id,)).fetchone()
 
     def is_document_active(self, doc_id):
+        """Return whether document active."""
         with self.db.connect() as conn:
             row = conn.execute("SELECT status FROM documents WHERE id = %s", (doc_id,)).fetchone()
             return bool(row and row[0] in ("queued", "processing"))
 
-    def get_document_status_and_data(self, doc_id, user=None):
+    def get_document_status_and_data(self, doc_id, actor=None):
+        """Return document status and data."""
         with self.db.connect() as conn:
-            if user and user != 'admin':
-                return conn.execute("SELECT status, original_filename, extracted_data FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, user)).fetchone()
+            if actor and actor != 'system':
+                return conn.execute("SELECT status, original_filename, extracted_data FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, actor)).fetchone()
             return conn.execute("SELECT status, original_filename, extracted_data FROM documents WHERE id = %s", (doc_id,)).fetchone()
 
-    def delete_document(self, doc_id, user=None):
+    def delete_document(self, doc_id, actor=None):
+        """Delete document."""
         with self.db.connect() as conn:
-            if user and user != 'admin':
+            if actor and actor != 'system':
                 result = conn.execute(
                     "DELETE FROM documents WHERE id = %s AND uploaded_by = %s",
-                    (doc_id, user),
+                    (doc_id, actor),
                 )
             else:
                 result = conn.execute(
@@ -79,11 +87,12 @@ class DocumentRepository:
             conn.commit()
             return result.rowcount > 0
 
-    def delete_all_documents(self, filter_type: str, user: str):
+    def delete_all_documents(self, filter_type: str, actor: str):
+        """Delete all documents."""
         with self.db.connect() as conn:
             if filter_type in ('mine', 'all'):
                 where_clause = "WHERE uploaded_by = %s"
-                params = (user,)
+                params = (actor,)
             elif filter_type == 'shared':
                 where_clause = "WHERE 1 = 0"
                 params = ()
@@ -97,6 +106,7 @@ class DocumentRepository:
             return docs
 
     def update_document_status(self, doc_id, status, error_message=None, extracted_data=None):
+        """Update document status."""
         with self.db.connect() as conn:
             if extracted_data is not None:
                 conn.execute("UPDATE documents SET status = %s, extracted_data = %s, progress = 100, progress_stage = 'Hoan thanh' WHERE id = %s", (status, Jsonb(extracted_data), doc_id))

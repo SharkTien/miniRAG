@@ -16,22 +16,46 @@ snapshot trang được lưu lazy trong MinIO để câu hỏi về figure/annot
 
 Chi tiết kiến trúc: [`docs/architecture.md`](docs/architecture.md).
 
+## Cấu trúc backend
+
+```text
+app/
+├── api/          # FastAPI routers và dependency injection
+├── config/       # constants, prompts, settings, database, object storage
+├── ingestion/    # upload, extract/OCR, normalize, chunking
+├── retrieval/    # embedding, vector/hybrid search, evidence, RAG
+├── repositories/ # PostgreSQL/pgvector data access
+├── schemas/      # request/response models
+├── main.py       # API entrypoint
+└── worker.py     # background ingestion worker
+tests/            # unit và API tests
+evaluation/       # retrieval verification và benchmark
+docs/             # architecture documentation
+```
+
+Project là backend-only; test và demo thực hiện bằng terminal, cURL hoặc
+Swagger tại `/docs`.
+
 ## Chạy bằng Docker
 
 ```bash
 cp .env.example .env
-# Điền JWT_SECRET_KEY, ADMIN_PASSWORD, POSTGRES_PASSWORD,
-# MINIO_ROOT_PASSWORD và NGC_API_KEY (nếu dùng model hosted)
+# Điền POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD và NGC_API_KEY (nếu dùng model hosted)
 docker compose up -d --build
 ```
 
-- UI: http://localhost:41873
+- API: http://localhost:41873
+- Swagger: http://localhost:41873/docs
 - MinIO Console: http://localhost:41901
 - Health: http://localhost:41873/health
 
-Tên container được Docker Compose đặt theo project để có thể chạy song song với các stack khác. UI dùng Vite + React + Tailwind và mặc định chạy tại port host `41873`; MinIO Console chạy tại `41901`. Có thể đổi bằng `APP_PORT` và `MINIO_CONSOLE_PORT` trong `.env`. Tài liệu upload tối đa 200 MB/file, được lưu tại bucket `ntc-documents` dưới prefix `raw/<document-id>/`; PostgreSQL chỉ lưu metadata, checksum SHA-256 và trạng thái ingestion.
+Đây là backend-only service; không yêu cầu frontend. Có thể kiểm thử bằng cURL,
+Swagger hoặc các test terminal. MinIO Console chạy tại `41901`; có thể đổi bằng
+`APP_PORT` và `MINIO_CONSOLE_PORT` trong `.env`. Tài liệu upload tối đa 200
+MB/file, được lưu tại bucket `ntc-documents` dưới prefix `raw/<document-id>/`;
+PostgreSQL chỉ lưu metadata, checksum SHA-256 và trạng thái ingestion.
 
-Worker `ntc_document_rag_worker` xử lý tài liệu từ hàng đợi PostgreSQL. Nếu worker bị restart, tài liệu ở trạng thái `queued` vẫn được xử lý tiếp. Với môi trường production, đặt `APP_ENV=production`, `COOKIE_SECURE=true` và chạy sau reverse proxy HTTPS.
+Worker `ntc_document_rag_worker` xử lý tài liệu từ hàng đợi PostgreSQL. Nếu worker bị restart, tài liệu ở trạng thái `queued` vẫn được xử lý tiếp. Backend không có hệ thống tài khoản; tin nhắn được lưu theo từng `conversation_id` trong PostgreSQL.
 
 Thư mục `documents/NTC_doc` là nguồn tài liệu ban đầu; MVP này chưa tự động nạp hàng loạt để tránh upload ngoài ý muốn. Bước tiếp theo có thể thêm job bulk-ingestion có dry-run, dedup theo SHA-256 và trạng thái xử lý chunk/embedding.
 
@@ -86,6 +110,16 @@ Upload một hoặc nhiều file (cả hai prefix đều được hỗ trợ):
 curl -F 'files=@policy.pdf' http://localhost:41873/documents
 ```
 
+Demo terminal end-to-end với file và câu hỏi tự chọn:
+
+```bash
+chmod +x scripts/demo_terminal.sh
+scripts/demo_terminal.sh "/absolute/path/to/file.pdf" "Question in the target language"
+```
+
+The script uploads the file, waits for the worker to reach `processed`, creates
+a conversation, sends the question, and prints the persisted conversation.
+
 Truy vấn và nhận câu trả lời cùng nguồn:
 
 ```bash
@@ -103,7 +137,10 @@ Response luôn có `answer` và `sources` (`file_name`, `chunk_id`, `page`,
 ```bash
 # Unit/API tests (sau khi cài requirements-dev.txt)
 pip install -r requirements.txt -r requirements-dev.txt
-PYTHONPATH=. pytest -q tests test/test_evidence_service.py test/test_ocr_routing.py
+PYTHONPATH=. pytest -q tests
+
+# Quality gate: naming, lint, public docstrings, tests, repository score
+python tools/quality_gate.py
 
 # Kiểm tra cú pháp và cấu hình compose
 python -m compileall -q app tests
@@ -114,6 +151,10 @@ Benchmark SynthDocQA chỉ dùng 5 PDF cục bộ và các câu hỏi thuộc 5 
 Báo cáo cải thiện và giới hạn được lưu tại
 [`evaluation/benchmark_summary.md`](evaluation/benchmark_summary.md).
 
+Quality gate dùng các chuẩn kiểm tra có thể tái lập: Ruff E/F/N, docstring cho
+public class/function trong `app`, pytest và kiểm tra deliverable. Mức đạt là
+`tối thiểu 90/100`; lần kiểm tra hiện tại đạt `100/100`.
+
 ## Giới hạn đã biết
 
 - Chất lượng/latency phụ thuộc embedding và LLM endpoint được cấu hình.
@@ -122,4 +163,5 @@ Báo cáo cải thiện và giới hạn được lưu tại
 - Reranker hiện là rule-based; nên bổ sung cross-encoder và feedback loop trước
   khi dùng cho quyết định có ảnh hưởng cao.
 
-Chi tiết quyết định kỹ thuật và kế hoạch benchmark nằm tại `Tinh_hoa_van_hoa/OCR_DEPLOYMENT.md`.
+Chi tiết quyết định kỹ thuật và kế hoạch benchmark nằm tại
+[`docs/ocr_deployment.md`](docs/ocr_deployment.md).

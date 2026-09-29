@@ -1,118 +1,126 @@
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_conversation_repo, get_rag_service
 from app.repositories.conversation_repo import ConversationRepository
-from app.services.rag_service import RagService
+from app.retrieval.rag_service import RagService
 
 logger = logging.getLogger("conversations_router")
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 class CreateConversationRequest(BaseModel):
-    title: Optional[str] = Field(default="Hội thoại mới", description="Tiêu đề cuộc trò chuyện")
-    id: Optional[str] = Field(default=None, description="Tùy chọn UUID do client khởi tạo")
+    """Provide the createconversationrequest application component."""
+    title: Optional[str] = Field(default=None, description="Optional conversation title")
+    id: Optional[str] = Field(default=None, description="Optional client-generated UUID")
 
 class UpdateConversationRequest(BaseModel):
-    title: str = Field(..., description="Tiêu đề mới của cuộc trò chuyện")
+    """Provide the updateconversationrequest application component."""
+    title: str = Field(..., description="New conversation title")
 
 class SendMessageRequest(BaseModel):
-    question: str = Field(..., description="Nội dung câu hỏi của người dùng")
-    top_k: Optional[int] = Field(default=10, ge=1, le=20, description="Số lượng chunks trích xuất")
-    document_id: Optional[str] = Field(default=None, description="ID tài liệu cần giới hạn phạm vi tra cứu")
+    """Provide the sendmessagerequest application component."""
+    question: str = Field(..., description="Question to answer")
+    top_k: Optional[int] = Field(default=10, ge=1, le=20, description="Maximum number of retrieved chunks")
+    document_id: Optional[str] = Field(default=None, description="Optional document scope")
 
-@router.get("", summary="Lấy danh sách các cuộc hội thoại")
+@router.get("", summary="List conversations")
 def list_conversations(
     repo: ConversationRepository = Depends(get_conversation_repo),
 ):
+    """List conversations."""
     try:
         return repo.list_conversations()
     except Exception as e:
-        logger.error("Lỗi khi lấy danh sách hội thoại: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Lỗi truy vấn cơ sở dữ liệu: {e}")
+        logger.error("Failed to list conversations: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail={"code": "conversation_list_failed"})
 
-@router.post("", summary="Tạo cuộc hội thoại mới")
+@router.post("", summary="Create a conversation")
 def create_conversation(
     payload: CreateConversationRequest,
     repo: ConversationRepository = Depends(get_conversation_repo),
 ):
+    """Create conversation."""
     try:
-        conv = repo.create_conversation(title=payload.title or "Hội thoại mới", conv_id=payload.id)
+        conv = repo.create_conversation(title=payload.title, conv_id=payload.id)
         return conv
     except Exception as e:
-        logger.error("Lỗi khi tạo cuộc hội thoại: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Lỗi tạo cuộc hội thoại: {e}")
+        logger.error("Failed to create conversation: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail={"code": "conversation_create_failed"})
 
-@router.get("/{conversation_id}", summary="Lấy chi tiết và lịch sử tin nhắn của cuộc hội thoại")
+@router.get("/{conversation_id}", summary="Get a conversation and its messages")
 def get_conversation_details(
     conversation_id: str,
     repo: ConversationRepository = Depends(get_conversation_repo),
 ):
+    """Return conversation details."""
     conv = repo.get_conversation(conversation_id)
     if not conv:
-        raise HTTPException(status_code=404, detail="Không tìm thấy cuộc hội thoại")
+        raise HTTPException(status_code=404, detail={"code": "conversation_not_found"})
     messages = repo.get_messages(conversation_id)
     conv["messages"] = messages
     return conv
 
-@router.patch("/{conversation_id}", summary="Đổi tên cuộc hội thoại")
+@router.patch("/{conversation_id}", summary="Rename a conversation")
 def update_conversation(
     conversation_id: str,
     payload: UpdateConversationRequest,
     repo: ConversationRepository = Depends(get_conversation_repo),
 ):
+    """Update conversation."""
     success = repo.update_title(conversation_id, payload.title)
     if not success:
-        raise HTTPException(status_code=404, detail="Không thể cập nhật cuộc hội thoại")
-    return {"message": "Đã cập nhật tiêu đề thành công"}
+        raise HTTPException(status_code=404, detail={"code": "conversation_update_failed"})
+    return {"status": "updated"}
 
-@router.delete("/{conversation_id}", summary="Xóa cuộc hội thoại")
+@router.delete("/{conversation_id}", summary="Delete a conversation")
 def delete_conversation(
     conversation_id: str,
     repo: ConversationRepository = Depends(get_conversation_repo),
 ):
+    """Delete conversation."""
     success = repo.delete_conversation(conversation_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Không thể xóa cuộc hội thoại")
-    return {"message": "Đã xóa cuộc hội thoại thành công"}
+        raise HTTPException(status_code=404, detail={"code": "conversation_delete_failed"})
+    return {"status": "deleted"}
 
-@router.post("/{conversation_id}/messages", summary="Gửi câu hỏi và sinh câu trả lời RAG lưu vào DB")
+@router.post("/{conversation_id}/messages", summary="Answer and persist a conversation message")
 def send_message_in_conversation(
     conversation_id: str,
     payload: SendMessageRequest,
     repo: ConversationRepository = Depends(get_conversation_repo),
     rag_service: RagService = Depends(get_rag_service),
 ):
+    """Send message in conversation."""
+    query_text = payload.question.strip()
+    if not query_text:
+        raise HTTPException(status_code=400, detail={"code": "question_required"})
+
     conv = repo.get_conversation(conversation_id)
     if not conv:
-        # Tự động tạo conversation nếu ID hợp lệ nhưng chưa có trong DB
         try:
             conv = repo.create_conversation(
-                title=payload.question[:50].strip() or "Hội thoại mới",
+                title=query_text[:50],
                 conv_id=conversation_id
             )
         except Exception:
-            raise HTTPException(status_code=404, detail="Cuộc hội thoại không tồn tại")
+            raise HTTPException(status_code=404, detail={"code": "conversation_not_found"})
 
-    query_text = payload.question.strip()
-    if not query_text:
-        raise HTTPException(status_code=400, detail="Câu hỏi không được để trống")
-
-    # 1. Lưu tin nhắn User vào CSDL
+    # 1. Persist the user message.
     user_msg = repo.add_message(
         conv_id=conversation_id,
         role="user",
         content=query_text
     )
 
-    # Nếu tên hội thoại đang là mặc định, tự động cập nhật tiêu đề theo câu hỏi đầu tiên
-    if conv.get("title") in ("Hội thoại mới", "New Chat", "", None):
+    # Generate a title from the first question when no title was supplied.
+    if not conv.get("title"):
         clean_title = query_text[:50].strip()
         repo.update_title(conversation_id, clean_title)
 
-    # 2. Xử lý RAG với Hybrid Search + LLM Synthesis
+    # 2. Run hybrid retrieval and LLM synthesis.
     try:
         rag_res = rag_service.answer_question(
             question=query_text,
@@ -123,12 +131,12 @@ def send_message_in_conversation(
         sources = rag_res.get("sources", [])
         retrieved_chunks = rag_res.get("retrieved_chunks", [])
     except Exception as exc:
-        logger.error("Lỗi khi xử lý RAG: %s", exc, exc_info=True)
-        answer_text = f"Xin lỗi, đã xảy ra lỗi khi tìm kiếm thông tin: {str(exc)}"
+        logger.error("RAG processing failed: %s", exc, exc_info=True)
+        answer_text = "rag_processing_failed"
         sources = []
         retrieved_chunks = []
 
-    # 3. Lưu tin nhắn Assistant vào CSDL
+    # 3. Persist the assistant message.
     assistant_msg = repo.add_message(
         conv_id=conversation_id,
         role="assistant",

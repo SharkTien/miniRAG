@@ -1,22 +1,24 @@
 import time
 import signal
 
-from app.core.database import DatabaseManager
-from app.core.storage import StorageManager
+from app.config.database import DatabaseManager
+from app.config.storage import StorageManager
 from app.repositories.document_repo import DocumentRepository
-from app.services.extract_service import ExtractService
-from app.core.config import EXTRACTION_TIMEOUT_SECONDS
+from app.ingestion.extract_service import ExtractService
+from app.config.settings import EXTRACTION_TIMEOUT_SECONDS
 
 
-class ExtractionTimeout(Exception):
+class ExtractionTimeoutError(Exception):
+    """Provide the extractiontimeouterror application component."""
     pass
 
 
 def _timeout_handler(signum, frame):
-    raise ExtractionTimeout(f"Extraction timeout sau {EXTRACTION_TIMEOUT_SECONDS} giây")
+    raise ExtractionTimeoutError(f"Extraction timeout sau {EXTRACTION_TIMEOUT_SECONDS} giây")
 
 
 def main() -> None:
+    """Run the background ingestion worker loop."""
     database = DatabaseManager()
     # Run idempotent schema migrations here as well: the worker and API start
     # independently under Compose, so neither may assume the other starts first.
@@ -39,7 +41,7 @@ def main() -> None:
         signal.alarm(EXTRACTION_TIMEOUT_SECONDS)
         try:
             service.extract_document_background(doc_id)
-        except ExtractionTimeout as exc:
+        except ExtractionTimeoutError as exc:
             print(f"Worker timeout document {doc_id}: {exc}", flush=True)
             repo.update_document_status(doc_id, "failed", error_message=str(exc))
         finally:

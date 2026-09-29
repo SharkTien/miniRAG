@@ -1,17 +1,17 @@
 """
 Query Router
 ============
-Triển khai endpoint POST /query theo đúng đặc tả kỹ thuật trong SUBJECT.md:
-- Nhận question
-- Thực hiện RAG (Retrieval-Augmented Generation)
-- Trả về answer + danh sách sources trích dẫn bắt buộc
+Implement the POST /query endpoint specified by SUBJECT.md:
+- accept a question;
+- run retrieval-augmented generation;
+- return an answer with mandatory source citations.
 """
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.schemas.query import QueryRequest, QueryResponse
-from app.services.rag_service import RagService
+from app.retrieval.rag_service import RagService
 from app.api.dependencies import get_rag_service
 
 router = APIRouter(tags=["query"])
@@ -21,23 +21,22 @@ logger = logging.getLogger("query_router")
 @router.post(
     "/query",
     response_model=QueryResponse,
-    summary="Truy vấn hỏi đáp thông minh dựa trên tài liệu đã nạp (RAG)",
+    summary="Answer a question using indexed documents (RAG)",
 )
 def query_documents(
     payload: QueryRequest,
     rag_service: RagService = Depends(get_rag_service),
 ) -> QueryResponse:
     """
-    API tiếp nhận câu hỏi từ người dùng:
-    1. Vector hóa câu hỏi bằng NVIDIA NIM Embedding
-    2. Vector Search lấy Top-K chunks liên quan nhất từ PostgreSQL pgvector
-    3. Ghép context và gọi NVIDIA NIM LLM sinh câu trả lời
-    4. Trả về answer cùng danh sách sources trích dẫn cụ thể
+    Accept a question, retrieve grounded evidence, and return cited output.
+
+    The endpoint embeds the question, performs top-k PostgreSQL/pgvector
+    retrieval, calls the configured LLM, and returns answer sources.
     """
     if not payload.question or not payload.question.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Câu hỏi (question) không được để trống",
+            detail={"code": "question_required", "message_key": "errors.question_required"},
         )
 
     try:
@@ -48,8 +47,8 @@ def query_documents(
         )
         return QueryResponse(**result)
     except Exception as exc:
-        logger.error("Lỗi khi xử lý POST /query: %s", exc, exc_info=True)
+        logger.error("Failed to process POST /query: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi trong quá trình xử lý câu hỏi: {str(exc)}",
+            detail={"code": "query_failed", "message_key": "errors.query_failed"},
         )

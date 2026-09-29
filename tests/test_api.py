@@ -10,7 +10,7 @@ from app.schemas.query import QueryRequest
 
 
 class FakeDocumentService:
-    def process_upload(self, file, user):
+    def process_upload(self, file, actor):
         return "00000000-0000-0000-0000-000000000001"
 
     class Repo:
@@ -61,5 +61,5 @@ def test_upload_handler_returns_queued_document():
         file=BytesIO(b"hello"),
         headers={"content-type": "text/plain"},
     )
-    response = upload_docs([upload], user="admin", doc_service=FakeDocumentService())
+    response = upload_docs([upload], actor="system", doc_service=FakeDocumentService())
     assert response["documents"][0]["status"] == "queued"

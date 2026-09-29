@@ -1,27 +1,27 @@
 """
 Chunk Repository
 ================
-Quản lý lưu trữ và truy vấn vector similarity trong bảng document_chunks bằng pgvector.
+Store and query vector similarity in the document_chunks table through pgvector.
 """
 
 import uuid
-import json
 import logging
 from typing import List, Dict, Any, Optional
 from psycopg.types.json import Jsonb
-from app.core.database import DatabaseManager
+from app.config.database import DatabaseManager
 
 logger = logging.getLogger("chunk_repo")
 
 
 class ChunkRepository:
+    """Provide the chunkrepository application component."""
     def __init__(self, db: DatabaseManager):
         self.db = db
 
     def save_chunks_batch(self, document_id: uuid.UUID, chunks_with_embeddings: List[Dict[str, Any]]) -> int:
         """
-        Lưu danh sách chunks kèm vector embedding vào PostgreSQL.
-        chunks_with_embeddings: list dict chứa {id, chunk_index, content, metadata, embedding}
+        Persist chunks and their embeddings in PostgreSQL.
+        ``chunks_with_embeddings`` contains id, index, content, metadata, and embedding.
         """
         if not chunks_with_embeddings:
             return 0
@@ -82,8 +82,7 @@ class ChunkRepository:
         query_text: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Tìm kiếm Top-K chunks tương đồng nhất.
-        Hỗ trợ Hybrid Search (Vector Cosine Distance + Full-Text Keyword Ranking RRF).
+        Retrieve the most similar top-k chunks using hybrid ranking.
         """
         if not query_embedding:
             return []
@@ -236,7 +235,7 @@ class ChunkRepository:
         return results
 
     def get_chunks_by_document(self, document_id: uuid.UUID) -> List[Dict[str, Any]]:
-        """Lấy tất cả chunks của một tài liệu."""
+        """Return all chunks belonging to a document."""
         with self.db.connect() as conn:
             rows = conn.execute("""
                 SELECT id, chunk_index, content, metadata, created_at
@@ -248,6 +247,7 @@ class ChunkRepository:
             return [
                 {
                     "id": str(r[0]),
+                    "chunk_id": str(r[0]),
                     "chunk_index": r[1],
                     "content": r[2],
                     "metadata": r[3] or {},

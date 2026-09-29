@@ -47,15 +47,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local benchmark caches and generated reports
-test/*_cache/
-test/benchmark_cache_ocr/
-test/benchmark_ocr_cache/
-test/page_visual_cache/
-test/visual_cache/
-test/table_structured_cache/
-test/annotation_region_cache/
-test/benchmark_results_*.json
-test/benchmark_report_*.md
+evaluation/artifacts/*_cache/
+evaluation/artifacts/benchmark_results_*.json
+evaluation/artifacts/benchmark_report_*.md
 
 # IDE & OS files
 .vscode/

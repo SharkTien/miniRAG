@@ -1,7 +1,7 @@
 import unittest
 
-from app.services.extract_service import ExtractService
-from app.services.normalize_service import NormalizeService
+from app.ingestion.extract_service import ExtractService
+from app.ingestion.normalize_service import NormalizeService
 
 
 class CoreComponentTests(unittest.TestCase):

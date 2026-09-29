@@ -1,2 +1,0 @@
-https://github.com/HKUDS/RAG-Anything
-https://github.com/infiniflow/ragflow

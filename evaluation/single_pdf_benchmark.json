@@ -1,0 +1,657 @@
+{
+  "pdf": "evaluation/2a9182eb67a7da402f2690ea.pdf",
+  "filename": "2a9182eb67a7da402f2690ea.pdf",
+  "pages": 5,
+  "questions": 10,
+  "question_pass": 3,
+  "question_pass_rate_pct": 30.0,
+  "required_point_hit": 21,
+  "required_point_total": 35,
+  "required_point_hit_rate_pct": 60.0,
+  "retrieval_source": "in-memory PDF page chunks + production EmbeddingService",
+  "generation_source": "production RagService grounded prompt and NVIDIA-compatible LLM",
+  "records": [
+    {
+      "id": "Q01",
+      "question": "Tôi vừa đủ 18 tuổi và đang tìm hiểu khoản vay MBSLink. Trước khi đăng ký, giới hạn tuổi tối đa có khác nhau giữa khách hàng nữ và nam không, cụ thể là bao nhiêu?",
+      "answer": "Không, giới hạn tuổi tối đa không khác nhau giữa khách hàng nữ và nam. Giới hạn tuổi tối đa đối với cả nam và nữ là 60 tuổi.",
+      "required": [
+        [
+          "18 tuổi"
+        ],
+        [
+          "60 tuổi"
+        ],
+        [
+          "65 tuổi"
+        ]
+      ],
+      "required_hit": 1,
+      "required_total": 3,
+      "pass": false,
+      "missing": [
+        [
+          "18 tuổi"
+        ],
+        [
+          "65 tuổi"
+        ]
+      ],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.754825,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.67316,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.611942,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.5185,
+        "coverage_score": 0.8,
+        "missing_requirements": [
+          "cụ thể bao nhiêu"
+        ],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p3"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 2.91
+    },
+    {
+      "id": "Q02",
+      "question": "Tôi là người Việt Nam đang cư trú trong nước và muốn đăng ký MBSLink. Hồ sơ có yêu cầu tôi phải có đầy đủ năng lực pháp luật và năng lực hành vi dân sự hay điều kiện tương tự nào không?",
+      "answer": "Để đăng ký MBSLink, bạn cần đáp ứng các điều kiện sau:\n\n- Là cá nhân người Việt Nam cư trú có đầy đủ năng lực pháp luật và năng lực hành vi dân sự theo quy định của pháp luật.\n\nVậy, hồ sơ yêu cầu bạn phải có đầy đủ năng lực pháp luật và năng lực hành vi dân sự.",
+      "required": [
+        [
+          "cá nhân người Việt Nam cư trú"
+        ],
+        [
+          "năng lực pháp luật"
+        ],
+        [
+          "năng lực hành vi dân sự"
+        ]
+      ],
+      "required_hit": 3,
+      "required_total": 3,
+      "pass": true,
+      "missing": [],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.824347,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.697192,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.632672,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.7333,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p3"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 3.68
+    },
+    {
+      "id": "Q03",
+      "question": "Tôi đang có tài khoản chứng khoán ở nơi khác nhưng chưa giao dịch qua MBS. Để dùng được MBSLink thì tôi có bắt buộc phải đứng tên một tài khoản giao dịch chứng khoán mở tại MBS không?",
+      "answer": "Không, bạn không bắt buộc phải đứng tên một tài khoản giao dịch chứng khoán mở tại MBS để dùng MBSLink. Tuy nhiên, bạn cần phải đáp ứng các điều kiện sử dụng DV MBSLink khác như đã nêu trong hướng dẫn.",
+      "required": [
+        [
+          "chủ tài khoản giao dịch chứng khoán"
+        ],
+        [
+          "MBS"
+        ]
+      ],
+      "required_hit": 1,
+      "required_total": 2,
+      "pass": false,
+      "missing": [
+        [
+          "chủ tài khoản giao dịch chứng khoán"
+        ]
+      ],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.666116,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.551631,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.583915,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.5714,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p3",
+          "2a9182eb67a7da402f2690ea_p4"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 3.19
+    },
+    {
+      "id": "Q04",
+      "question": "Ứng dụng báo tôi chưa đủ điều kiện đăng ký dịch vụ. Tôi cần chuyển sang gói nào trên MBBank, và việc định danh với ngân hàng phải được thực hiện ra sao?",
+      "answer": "Để đăng ký dịch vụ MBSLink trên ứng dụng MBBank, bạn cần đảm bảo đã ở \"Gói nâng cao\". Vì vậy, bạn cần chuyển sang gói này.\n\nĐể chuyển đổi gói dịch vụ trên app MBBank, bạn làm theo hướng dẫn sau:\n\nBước 1: Đăng nhập ứng dụng MBBank của bạn, chọn \"Tiện ích\"\nBước 2: Chọn \"Thay đổi hạn mức chuyển tiền\"\nBước 3: Chọn \"Gói nâng cao\" để đảm bảo đủ điều kiện sử dụng dịch vụ MBSLink\nBước 4: Chọn \"Chọn gói này\" để hoàn tất đăng ký gói\n\nVề việc định danh với ngân hàng, bạn cần được định danh trực tiếp bởi CBNV MB theo quy định định danh KH của MB từng thời kỳ. Bạn cần ký trực tiếp Đề nghị kiêm hợp đồng sử dụng dịch vụ TKTT, thẻ, MB điện tử theo quy định từng thời kỳ.",
+      "required": [
+        [
+          "gói nâng cao"
+        ],
+        [
+          "định danh trực tiếp"
+        ],
+        [
+          "CBNV MB"
+        ]
+      ],
+      "required_hit": 3,
+      "required_total": 3,
+      "pass": true,
+      "missing": [],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.812498,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.804621,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.670581,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.9048,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p3"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 10.88
+    },
+    {
+      "id": "Q05",
+      "question": "Tôi muốn kiểm tra trước xem lịch sử tín dụng có ảnh hưởng đến việc được cấp hạn mức MBSLink hay không. Trong 12 tháng gần đây và tại thời điểm vay, những khoản nợ nào sẽ khiến tôi không đủ điều kiện?",
+      "answer": "Theo hướng dẫn sử dụng dịch vụ MBSLink trên App MBBank, để đủ điều kiện sử dụng dịch vụ này, bạn không được có nợ thuộc nhóm 2 đến nhóm 5 trong 12 tháng gần nhất tại các Tổ chức tín dụng (bao gồm cả MB) và nợ quá hạn tại MBS và MB vào thời điểm vay vốn.\n\nVậy, lịch sử tín dụng của bạn sẽ ảnh hưởng đến việc được cấp hạn mức MBSLink nếu bạn có nợ thuộc nhóm 2 đến nhóm 5 trong 12 tháng gần nhất hoặc nợ quá hạn tại MBS và MB vào thời điểm vay vốn.",
+      "required": [
+        [
+          "nhóm 2"
+        ],
+        [
+          "nhóm 5"
+        ],
+        [
+          "12 tháng"
+        ],
+        [
+          "nợ quá hạn"
+        ]
+      ],
+      "required_hit": 4,
+      "required_total": 4,
+      "pass": true,
+      "missing": [],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.821879,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.738404,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.672851,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.7742,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p3"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 6.28
+    },
+    {
+      "id": "Q06",
+      "question": "Tôi đã đăng nhập app MBBank nhưng chưa tìm thấy chỗ đăng ký hạn mức cho nhu cầu đầu tư. Có thể hướng dẫn tôi đi từ màn hình đầu tiên đến đúng chức năng cần chọn không?",
+      "answer": "Để đăng ký hạn mức cho nhu cầu đầu tư trên app MBBank, bạn cần thực hiện các bước sau:\n\nBước 1: Đăng nhập ứng dụng MBBank của bạn, chọn \"Vay Online\"\n\nBước 2: Chọn \"SXKD và Đầu tư\"\n\nBước 3: Chọn \"Đăng kí cấp hạn mức\"\n\nNếu bạn chưa có tài khoản tại MBS, hệ thống sẽ hướng dẫn bạn về tiện ích mở TK chứng khoán trên ứng dụng MBBank. Nếu bạn đã có tài khoản tại MBS, hệ thống sẽ hiển thị thông tin cấp hạn mức để bạn xử lí các bước tiếp theo.",
+      "required": [
+        [
+          "đăng nhập"
+        ],
+        [
+          "vay online"
+        ],
+        [
+          "SXKD và đầu tư"
+        ],
+        [
+          "đăng ký cấp hạn mức"
+        ]
+      ],
+      "required_hit": 3,
+      "required_total": 4,
+      "pass": false,
+      "missing": [
+        [
+          "đăng ký cấp hạn mức"
+        ]
+      ],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.787924,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.682893,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.749722,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.5862,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p3",
+          "2a9182eb67a7da402f2690ea_p4"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 5.93
+    },
+    {
+      "id": "Q07",
+      "question": "Tôi chưa từng mở tài khoản chứng khoán tại MBS. Khi bắt đầu đăng ký MBSLink trên app, hệ thống sẽ đưa tôi đi đâu và tôi cần thực hiện việc mở tài khoản ở đâu?",
+      "answer": "Tài liệu liên quan hiện chưa có đủ nội dung để trả lời câu hỏi. Nội dung còn thiếu: hệ thống đưa đi.",
+      "required": [
+        [
+          "chưa có"
+        ],
+        [
+          "điều hướng"
+        ],
+        [
+          "mở TK chứng khoán"
+        ],
+        [
+          "ứng dụng MBBank"
+        ]
+      ],
+      "required_hit": 1,
+      "required_total": 4,
+      "pass": false,
+      "missing": [
+        [
+          "điều hướng"
+        ],
+        [
+          "mở TK chứng khoán"
+        ],
+        [
+          "ứng dụng MBBank"
+        ]
+      ],
+      "sources": [],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "PARTIAL",
+        "consistency": "CONSISTENT",
+        "answerability": false,
+        "relevance_score": 0.8421,
+        "coverage_score": 0.6667,
+        "missing_requirements": [
+          "hệ thống đưa đi"
+        ],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p3",
+          "2a9182eb67a7da402f2690ea_p4"
+        ]
+      },
+      "decision": "RETRIEVE_MORE",
+      "latency_seconds": 0.96
+    },
+    {
+      "id": "Q08",
+      "question": "Tôi đã có tài khoản tại MBS và muốn hoàn tất hồ sơ ngay trên ứng dụng. Sau khi chọn chi nhánh hỗ trợ, tôi cần chuẩn bị giấy tờ, đăng ký chữ ký số và xác thực bằng cách nào?",
+      "answer": "Sau khi chọn chi nhánh hỗ trợ, bạn cần chuẩn bị giấy tờ, đăng ký chữ ký số và xác thực bằng cách:\n\n- Chụp ảnh giấy tờ tùy thân theo hướng dẫn\n- Đăng ký chữ ký số\n- Nhập DOTP (Mã xác thực một lần) để hoàn tất quá trình đăng ký chữ ký số.",
+      "required": [
+        [
+          "chọn CN MB hỗ trợ"
+        ],
+        [
+          "chữ ký CA"
+        ],
+        [
+          "chụp ảnh giấy tờ tùy thân"
+        ],
+        [
+          "DOTP"
+        ]
+      ],
+      "required_hit": 2,
+      "required_total": 4,
+      "pass": false,
+      "missing": [
+        [
+          "chọn CN MB hỗ trợ"
+        ],
+        [
+          "chữ ký CA"
+        ]
+      ],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.716691,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.740902,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.70468,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.7143,
+        "coverage_score": 0.8,
+        "missing_requirements": [
+          "xác bằng cách"
+        ],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p3",
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 5.31
+    },
+    {
+      "id": "Q09",
+      "question": "Tôi đã kiểm tra xong thông tin cấp hạn mức trên ứng dụng và muốn hoàn tất đăng ký. Ở màn hình cuối tôi cần xác nhận và xác thực thêm thao tác gì?",
+      "answer": "Tài liệu liên quan hiện chưa có đủ nội dung để trả lời câu hỏi. Nội dung còn thiếu: ký màn hình cuối xác.",
+      "required": [
+        [
+          "kiểm tra"
+        ],
+        [
+          "xác nhận"
+        ],
+        [
+          "nhập DOTP"
+        ]
+      ],
+      "required_hit": 0,
+      "required_total": 3,
+      "pass": false,
+      "missing": [
+        [
+          "kiểm tra"
+        ],
+        [
+          "xác nhận"
+        ],
+        [
+          "nhập DOTP"
+        ]
+      ],
+      "sources": [],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "PARTIAL",
+        "consistency": "CONSISTENT",
+        "answerability": false,
+        "relevance_score": 0.7826,
+        "coverage_score": 0.6667,
+        "missing_requirements": [
+          "ký màn hình cuối xác"
+        ],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p3",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p1"
+        ]
+      },
+      "decision": "RETRIEVE_MORE",
+      "latency_seconds": 0.7
+    },
+    {
+      "id": "Q10",
+      "question": "Tôi đang dùng một gói MBBank khác và muốn đổi sang gói phù hợp để đăng ký MBSLink. Tôi phải vào khu vực nào, chọn những mục nào, và việc đổi gói có bị tính thêm phí không?",
+      "answer": "Để đổi sang gói phù hợp để đăng ký MBSLink, bạn cần vào khu vực \"Tiện ích\" trên ứng dụng MBBank, chọn \"Thay đổi hạn mức chuyển tiền\", sau đó chọn \"Gói nâng cao\" để đảm bảo đủ điều kiện sử dụng dịch vụ MBSLink. Việc đổi gói không bị tính thêm phí.",
+      "required": [
+        [
+          "tiện ích"
+        ],
+        [
+          "thay đổi hạn mức chuyển tiền"
+        ],
+        [
+          "gói nâng cao"
+        ],
+        [
+          "chọn gói này"
+        ],
+        [
+          "không phát sinh thêm chi phí"
+        ]
+      ],
+      "required_hit": 3,
+      "required_total": 5,
+      "pass": false,
+      "missing": [
+        [
+          "chọn gói này"
+        ],
+        [
+          "không phát sinh thêm chi phí"
+        ]
+      ],
+      "sources": [
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p1",
+          "page": 1,
+          "similarity_score": 0.773498,
+          "snippet": "1    HƯỚNG DẪN KHÁCH HÀNG TRẢI NGHIỆM DỊCH VỤ MBSLINK  TRÊN APP MBBANK  1. Điều kiện sử dụng DV MBSLink  - Khách hàng từ 18 tuổi trở lên tại thời điểm..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p4",
+          "page": 4,
+          "similarity_score": 0.766812,
+          "snippet": "4      Bước 6: Hiển thị thông báo cấp hạn mức thành công    3. Hướng dẫn chuyển đổi gói dịch vụ trên app MBBank  Lưu ý: Khi thực hiện chuyển đổi gói d..."
+        },
+        {
+          "document_id": "",
+          "file_name": "2a9182eb67a7da402f2690ea.pdf",
+          "chunk_id": "2a9182eb67a7da402f2690ea_p3",
+          "page": 3,
+          "similarity_score": 0.651247,
+          "snippet": "3      Bước 4.1: Quý khách chưa có TK tại MBS, hệ thống sẽ điều hướng Quý khách về tiện ích mở TK chứng  khoán trên ứng dụng MBBank.  Bước 4.2: Quý kh..."
+        }
+      ],
+      "evidence": {
+        "relevance": "RELEVANT",
+        "coverage": "SUFFICIENT",
+        "consistency": "CONSISTENT",
+        "answerability": true,
+        "relevance_score": 0.6364,
+        "coverage_score": 1.0,
+        "missing_requirements": [],
+        "selected_chunk_ids": [
+          "2a9182eb67a7da402f2690ea_p1",
+          "2a9182eb67a7da402f2690ea_p4",
+          "2a9182eb67a7da402f2690ea_p3"
+        ]
+      },
+      "decision": "ANSWER",
+      "latency_seconds": 3.96
+    }
+  ]
+}

@@ -3,12 +3,14 @@ from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
-    question: str = Field(..., description="Câu hỏi cần tra cứu từ tài liệu")
-    top_k: Optional[int] = Field(5, description="Số lượng chunks tối đa trích xuất")
-    document_id: Optional[str] = Field(None, description="Lọc theo document_id cụ thể (tùy chọn)")
+    """Provide the queryrequest application component."""
+    question: str = Field(..., description="Question to answer from indexed documents")
+    top_k: Optional[int] = Field(5, description="Maximum number of retrieved chunks")
+    document_id: Optional[str] = Field(None, description="Optional document scope")
 
 
 class SourceCitation(BaseModel):
+    """Provide the sourcecitation application component."""
     file_name: str
     chunk_id: str
     page: Optional[Any] = None
@@ -17,6 +19,7 @@ class SourceCitation(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    """Provide the queryresponse application component."""
     answer: str
     sources: List[SourceCitation]
     total_chunks_retrieved: Optional[int] = 0

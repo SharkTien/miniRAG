@@ -65,7 +65,7 @@ and `/api/documents`.
 
 | Component | Responsibility |
 | --- | --- |
-| FastAPI routers | health, upload, query, auth and document lifecycle APIs |
+| FastAPI routers | health, upload, query, conversation and document lifecycle APIs |
 | PostgreSQL + pgvector | document metadata, chunks, embeddings and conversations |
 | MinIO | original files, visual crops and page snapshots |
 | ExtractService | parser routing, OCR, provenance and indexing orchestration |

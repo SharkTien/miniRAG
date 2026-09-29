@@ -8,54 +8,68 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
-from app.api.dependencies import get_current_user, get_document_service, get_extract_service, get_document_repo, get_storage
-from app.services.document_service import DocumentService
-from app.services.extract_service import ExtractService
+from app.api.dependencies import get_system_actor, get_document_service, get_document_repo, get_storage
+from app.ingestion.document_service import DocumentService
 from app.repositories.document_repo import DocumentRepository
-from app.core.storage import StorageManager
+from app.config.storage import StorageManager
 
 router = APIRouter(tags=["documents"])
 
 @router.get("")
 def get_docs(
     page: int = 1, size: int = 10, filter: str = 'all',
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     doc_service: DocumentService = Depends(get_document_service)
 ):
-    return doc_service.list_documents(page, size, filter, user)
+    """Return docs."""
+    return doc_service.list_documents(page, size, filter, actor)
 
 @router.post("")
 def upload_docs(
     files: list[UploadFile] = File(...), 
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     doc_service: DocumentService = Depends(get_document_service)
 ):
+    """Upload docs."""
     docs = []
     for file in files:
-        doc_id = doc_service.process_upload(file, user)
+        doc_id = doc_service.process_upload(file, actor)
         doc_service.repo.update_document_status(doc_id, "queued")
-        docs.append({"id": str(doc_id), "filename": file.filename, "status": "queued"})
+        # Processing is asynchronous.  The worker performs extraction,
+        # chunking and embedding after the upload has been acknowledged, so
+        # ``total_chunks`` is initially zero and is updated in document data.
+        docs.append({
+            "document_id": str(doc_id),
+            "file_name": file.filename,
+            "status": "queued",
+            "total_chunks": 0,
+            # Keep legacy response keys for existing clients.
+            "id": str(doc_id),
+            "filename": file.filename,
+        })
     return {"message": "Tải lên thành công", "documents": docs, "uploaded": docs}
 
 @router.delete("/{document_id}")
 def delete_document_api(
     document_id: uuid.UUID, 
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     doc_service: DocumentService = Depends(get_document_service)
 ):
-    doc_service.delete_doc(document_id, user)
+    """Delete document api."""
+    doc_service.delete_doc(document_id, actor)
     return {"message": "Đã xóa tài liệu", "id": str(document_id)}
 
 @router.post("/{document_id}/cancel")
 def cancel_document_api(
     document_id: uuid.UUID,
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo),
 ):
-    row = repo.get_document(document_id, user)
+    """Cancel document api."""
+    row = repo.get_document(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại hoặc không có quyền")
-    status = repo.get_document_status_and_data(document_id, user)[0]
+    status = repo.get_document_status_and_data(document_id, actor)[0]
     if status not in ("queued", "processing"):
         raise HTTPException(409, "Tài liệu không còn đang xử lý")
     repo.update_document_status(document_id, "cancelled", error_message="Đã hủy theo yêu cầu người dùng")
@@ -64,34 +78,41 @@ def cancel_document_api(
 @router.delete("/bulk/all")
 def delete_all_documents_api(
     filter: str = 'all',
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     doc_service: DocumentService = Depends(get_document_service)
 ):
-    count = doc_service.delete_all_docs(filter, user)
+    """Delete all documents api."""
+    count = doc_service.delete_all_docs(filter, actor)
     return {"message": f"Đã xóa toàn bộ {count} tài liệu"}
 
 @router.get("/{document_id}/extraction")
 def get_extraction(
     document_id: uuid.UUID, 
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo)
 ):
-    row = repo.get_document_status_and_data(document_id, user)
+    """Return extraction."""
+    row = repo.get_document_status_and_data(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại")
+    extracted_data = row[2] or {}
     return {
+        "document_id": str(document_id),
+        "file_name": row[1],
         "status": row[0],
         "filename": row[1],
-        "extracted_data": row[2]
+        "total_chunks": len(extracted_data.get("chunks") or []),
+        "extracted_data": extracted_data,
     }
 
 @router.get("/{document_id}/images")
 def get_document_images(
     document_id: uuid.UUID,
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo),
 ):
-    row = repo.get_document_status_and_data(document_id, user)
+    """Return document images."""
+    row = repo.get_document_status_and_data(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại")
     extracted_data = row[2] or {}
@@ -118,11 +139,12 @@ def get_document_images(
 @router.get("/{document_id}/content")
 def get_document_content(
     document_id: uuid.UUID, 
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo),
     storage: StorageManager = Depends(get_storage)
 ):
-    row = repo.get_document(document_id, user)
+    """Return document content."""
+    row = repo.get_document(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại")
         
@@ -146,17 +168,17 @@ def get_document_content(
 @router.get("/{document_id}/preview")
 def preview_document(
     document_id: uuid.UUID,
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo),
     storage: StorageManager = Depends(get_storage),
 ):
     """Convert Office documents to a temporary PDF for browser preview."""
-    row = repo.get_document(document_id, user)
+    row = repo.get_document(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại")
     suffix = Path(row[1]).suffix.lower()
     if suffix not in {".pptx", ".docx", ".xlsx"}:
-        return get_document_content(document_id, user, repo, storage)
+        return get_document_content(document_id, actor, repo, storage)
 
     workdir = tempfile.mkdtemp(prefix="ntc-preview-")
     source = os.path.join(workdir, f"source{suffix}")
@@ -188,20 +210,21 @@ def preview_document(
 @router.get("/{document_id}/file")
 def get_document_file_alias(
     document_id: uuid.UUID,
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo),
     storage: StorageManager = Depends(get_storage),
 ):
     """Alias for previewing/downloading document file."""
-    return preview_document(document_id, user, repo, storage)
+    return preview_document(document_id, actor, repo, storage)
 
 @router.post("/{document_id}/extract")
 def manual_extract_document(
     document_id: uuid.UUID, 
-    user: str = Depends(get_current_user),
+    actor: str = Depends(get_system_actor),
     repo: DocumentRepository = Depends(get_document_repo)
 ):
-    row = repo.get_document_status_and_data(document_id, user)
+    """Run the extract document operation."""
+    row = repo.get_document_status_and_data(document_id, actor)
     if not row:
         raise HTTPException(404, "Tài liệu không tồn tại")
         

@@ -6,10 +6,6 @@ services:
       - "${APP_PORT:-41873}:8000"
     environment:
       APP_ENV: ${APP_ENV:-development}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rag}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
@@ -41,32 +37,14 @@ services:
       EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
       PERSIST_PAGE_VISUALS: ${PERSIST_PAGE_VISUALS:-true}
       PAGE_VISUAL_SCALE: ${PAGE_VISUAL_SCALE:-1.5}
-    command:
-      - sh
-      - -c
-      - >-
-        until [ -f /app/frontend/dist/index.html ] && [ -d /app/frontend/dist/assets ]; do
-          echo 'Waiting for frontend build...'; sleep 1;
-        done;
-        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ./app:/app/app
-      - frontend_dist:/app/frontend/dist
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_started
-
-  frontend_builder:
-    image: node:22-alpine
-    restart: unless-stopped
-    working_dir: /frontend
-    volumes:
-      - ./frontend:/frontend
-      - frontend_dist:/frontend/dist
-      - frontend_node_modules:/frontend/node_modules
-    command: sh -c "npm install --no-audit --no-fund && npx vite build --watch"
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -100,7 +78,6 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-development}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rag}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
@@ -166,7 +143,7 @@ services:
     working_dir: /app
     volumes:
       - ./app:/app/app
-      - ./test:/app/test
+      - ./tools:/app/tools
       - ./:/pdf          # mount toàn bộ project root để truy cập PDF
     environment:
       NGC_API_KEY: ${NGC_API_KEY:-}
@@ -199,14 +176,12 @@ services:
       QWEN_MODEL: ${QWEN_MODEL:-a2genesis/Qwen3.8-27B-NVFP4}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    entrypoint: ["python", "/app/test/debug_pipeline.py"]
+    entrypoint: ["python", "/app/tools/debug_pipeline.py"]
     # Không depends_on postgres/minio vì debug chỉ dùng Docling + NIM API
 
 volumes:
   postgres_data:
   minio_data:
-  frontend_dist:
-  frontend_node_modules:
 
 networks:
   default:

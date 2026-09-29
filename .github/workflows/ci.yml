@@ -21,14 +21,36 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app tests
       - name: Lint
-        run: ruff check app tests --select E9
-      - name: Unit and API tests
-        run: PYTHONPATH=. pytest -q tests test/test_evidence_service.py test/test_ocr_routing.py
+        run: ruff check app tests
+      - name: Quality gate (naming, docs, tests, score)
+        run: python tools/quality_gate.py
 
   docker:
     runs-on: ubuntu-latest
     needs: quality
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Build API image
         run: docker build --tag mini-rag:ci .
+      - name: Run Compose smoke test
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          MINIO_ROOT_USER: ci-minio-user
+          MINIO_ROOT_PASSWORD: ci-minio-password
+          APP_PORT: 41873
+        run: |
+          set -euo pipefail
+          trap 'docker compose down -v --remove-orphans' EXIT
+          docker compose up -d --build postgres minio ntc_document_rag
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://localhost:${APP_PORT}/health; then
+              echo
+              echo "Compose smoke test passed"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color ntc_document_rag postgres minio
+          exit 1

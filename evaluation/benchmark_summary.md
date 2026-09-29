@@ -28,4 +28,4 @@ model có bằng chứng trực quan khi chunk tương ứng được retrieve.
 
 Các số liệu trên không thể so trực tiếp với RAGBench/TRACe vì SynthDocQA không
 có relevant-span/utilized-span annotation đầy đủ. Báo cáo benchmark chi tiết
-và các artifact thử nghiệm nằm trong thư mục `test/` khi chạy benchmark cục bộ.
+và các artifact thử nghiệm nằm trong thư mục `evaluation/artifacts/` khi chạy benchmark cục bộ.
