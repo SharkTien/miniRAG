@@ -35,6 +35,14 @@ _ANSWER_TERMS = {
     "approved", "approval", "leave", "hours", "salary", "payment", "paid",
 }
 
+_GENERIC_QUERY_TERMS = {
+    "giá", "dịch", "vụ", "thông", "tin", "nội", "dung", "như", "nào",
+}
+_MONEY_PATTERN = re.compile(
+    r"\b\d[\d\s.,]*\s*(?:đ|đồng|vnđ|vnd)\b|\btổng\s+cộng\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
 
 def _fold(text: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFC", text or "").lower()).strip()
@@ -122,13 +130,16 @@ class EvidenceService:
         covered: List[str] = []
         missing: List[str] = []
         for phrase in q_phrases:
-            p_tokens = set(_tokens(phrase))
+            p_tokens = set(_tokens(phrase)) - _GENERIC_QUERY_TERMS
             phrase_hit = phrase in joined_folded
             token_hit = len(p_tokens & set(_tokens(joined))) / max(1, len(p_tokens)) >= 0.6
             (covered if phrase_hit or token_hit else missing).append(phrase)
 
         asked_answer_dimension = _contains_any(question, _ANSWER_TERMS)
-        answer_dimension_present = _contains_any(joined, _ANSWER_TERMS)
+        answer_dimension_present = (
+            _contains_any(joined, _ANSWER_TERMS)
+            or bool(_MONEY_PATTERN.search(joined))
+        )
         coverage_score = len(covered) / max(1, len(q_phrases))
         if asked_answer_dimension and not answer_dimension_present:
             coverage_score *= 0.35
