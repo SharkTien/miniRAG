@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -33,7 +35,10 @@ def test_config_loading():
     print(f"NIM Concurrency: {NIM_CONCURRENCY}")
     masked_key = NGC_API_KEY[:8] + "..." + NGC_API_KEY[-4:] if NGC_API_KEY else "EMPTY"
     print(f"NGC_API_KEY configured: {masked_key}")
-    assert NGC_API_KEY, "NGC_API_KEY must not be empty"
+    # A real NIM key is intentionally not required in public CI.  Live API
+    # checks can be enabled by providing NGC_API_KEY in a protected runner.
+    if not NGC_API_KEY:
+        pytest.skip("NGC_API_KEY is not configured; live NIM checks are optional")
     print(">> TEST 1 PASSED\n")
 
 
