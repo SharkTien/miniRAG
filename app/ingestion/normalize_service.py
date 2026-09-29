@@ -132,6 +132,40 @@ class NormalizeService:
                     "element_type": item.get("label", "text"),
                     "provenance_index": prov_index,
                 })
+        # Preserve structured tables as searchable row-oriented elements. This
+        # keeps the relationship between a label and its value when Docling's
+        # table structure model is enabled, instead of flattening every cell
+        # into an unrelated text span.
+        for table_index, table in enumerate(doc_json.get("tables", []) or []):
+            data = table.get("data") or {}
+            cells = data.get("table_cells") or data.get("cells") or []
+            rows = {}
+            for cell in cells:
+                text = cls.clean_text(cell.get("text") or cell.get("content") or "")
+                if not text:
+                    continue
+                row = cell.get("start_row_offset_idx", cell.get("row", 0))
+                col = cell.get("start_col_offset_idx", cell.get("col", 0))
+                try:
+                    row, col = int(row), int(col)
+                except (TypeError, ValueError):
+                    row, col = 0, len(rows.get(0, []))
+                rows.setdefault(row, {})[col] = text
+            if not rows:
+                continue
+            provenance = (table.get("prov") or [{}])[0]
+            page = provenance.get("page_no")
+            for row_index, columns in sorted(rows.items()):
+                values = [columns[col] for col in sorted(columns)]
+                elements.append({
+                    "element_id": f"#/tables/{table_index}/rows/{row_index}",
+                    "text": " | ".join(values),
+                    "page": page,
+                    "bbox": None,
+                    "coord_origin": None,
+                    "element_type": "table",
+                    "provenance_index": 0,
+                })
         return sorted(
             elements,
             key=lambda element: (

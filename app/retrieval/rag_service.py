@@ -23,6 +23,7 @@ from app.config.settings import (
     NIM_BASE_URL,
     LLM_MODEL,
     TOP_K,
+    RETRIEVAL_CANDIDATE_MULTIPLIER,
 )
 from app.config.prompts import CHITCHAT_SYSTEM_PROMPT, GROUNDED_QA_SYSTEM_PROMPT
 from app.retrieval.evidence_service import EvidenceService
@@ -164,7 +165,7 @@ class RagService:
         # budget. Fetching only top_k here made the reranker unable to recover
         # relevant passages ranked just below the vector-search cutoff.
         final_k = max(1, min(int(top_k or TOP_K), 8))
-        candidate_k = min(40, max(final_k * 4, 16))
+        candidate_k = min(80, max(final_k * RETRIEVAL_CANDIDATE_MULTIPLIER, 16))
         raw_chunks = self.retriever.retrieve(
             query=q,
             top_k=candidate_k,
