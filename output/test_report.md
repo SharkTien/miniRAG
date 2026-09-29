@@ -7,7 +7,7 @@ Ngày ghi nhận: `2026-09-28`.
 | Kiểm tra | Lệnh | Kết quả |
 |---|---|---|
 | Python syntax/bytecode | `python -m compileall -q app tests` | PASS |
-| Unit + API + OCR/evidence tests | `PYTHONPATH=. pytest -q tests` | PASS — 19 passed |
+| Unit + API + OCR/evidence tests | `PYTHONPATH=. pytest -q tests` | PASS — 22 passed |
 | Ruff critical syntax checks | `ruff check app tests --select E9` | PASS — All checks passed |
 | Compose schema/interpolation | `docker compose config --quiet` | PASS |
 | Compose smoke run | `docker compose up -d` + `GET /health` + teardown | PASS — local CI-equivalent run |
@@ -23,6 +23,9 @@ Ngày ghi nhận: `2026-09-28`.
 - Query trả `answer` và `sources`.
 - Query rỗng bị reject HTTP 400.
 - Upload trả document ở trạng thái `queued`.
+- Upload file có phần mở rộng không hỗ trợ bị từ chối HTTP 400.
+- Query không có bằng chứng trả về `sources=[]` và không sinh nguồn giả.
+- Config loading kiểm tra database, embedding, LLM, chunk và top-k.
 - OCR routing/evidence service regression tests.
 - Naming theo PEP 8 và public docstring coverage 100% trong `app`.
 

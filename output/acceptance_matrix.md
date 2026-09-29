@@ -18,8 +18,8 @@
 | Dockerfile, Compose, env template | Ba file deliverable ở root | PASS |
 | CI lint → test → Docker build | `.github/workflows/ci.yml`; local CI-equivalent đã chạy | PASS local; GitHub Actions chưa kích hoạt |
 | Frontend production build | `frontend/Dockerfile`, `frontend/package.json`, CI job `frontend` | Đã bổ sung; `npm run build` đạt |
-| Unit test | `tests/test_core_components.py`, test report: 19 passed | PASS |
-| API test | `tests/test_api.py`, test report: 19 passed | PASS |
+| Unit test | `tests/test_core_components.py`, test report: 22 passed | PASS |
+| API test | `tests/test_api.py`: health, upload hợp lệ/không hỗ trợ, query hợp lệ/rỗng/không có dữ liệu | PASS |
 | Retrieval verification 5–10 câu | [retrieval_verification.csv](retrieval_verification.csv): 10/10 pass | PASS |
 | README | `README.md` root và [submission README](README.md) | PASS |
 | Architecture document | `docs/architecture.md` và [bản trình bày](architecture.md) | PASS |

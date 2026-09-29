@@ -2,9 +2,17 @@ import unittest
 
 from app.ingestion.extract_service import ExtractService
 from app.ingestion.normalize_service import NormalizeService
+from app.config import settings
 
 
 class CoreComponentTests(unittest.TestCase):
+    def test_config_loading_has_retrieval_defaults(self):
+        self.assertTrue(settings.DATABASE_URL)
+        self.assertTrue(settings.EMBEDDING_MODEL)
+        self.assertTrue(settings.LLM_MODEL)
+        self.assertGreater(settings.CHUNK_SIZE, settings.CHUNK_OVERLAP)
+        self.assertGreaterEqual(settings.TOP_K, 1)
+
     def test_clean_text_normalizes_whitespace_and_control_chars(self):
         cleaned = NormalizeService.clean_text("  A\x00  B\n\n\n C  ")
         self.assertEqual(cleaned, "A B\n\nC")
