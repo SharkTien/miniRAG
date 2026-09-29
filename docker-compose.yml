@@ -86,7 +86,9 @@ services:
     ports:
       - "${MINIO_CONSOLE_PORT:-41901}:9001"
     volumes:
-      - minio_data:/bitnami/minio/data
+      # Use a dedicated volume for the Bitnami image. The previous quay.io
+      # volume can be owned by a different UID and prevents MinIO startup.
+      - minio_data_v2:/bitnami/minio/data
 
   ntc_document_rag_worker:
     build: .
@@ -199,7 +201,7 @@ services:
 
 volumes:
   postgres_data:
-  minio_data:
+  minio_data_v2:
 
 networks:
   default:
