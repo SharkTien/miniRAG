@@ -71,3 +71,18 @@ API trả `answer` và danh sách `sources`. Mỗi source có tối thiểu `fil
 
 Nếu không có bằng chứng phù hợp, hệ thống từ chối hoặc báo thiếu dữ liệu thay
 vì sinh câu trả lời dựa trên nội dung không xác định được nguồn.
+
+## Mục 4 — Data & Retrieval
+
+Luồng thực tế là:
+
+```text
+Question → Embedding → hybrid vector/lexical search → Top-K chunks
+         → evidence gate/rerank → grounded LLM → Answer + Source
+```
+
+PostgreSQL với pgvector lưu vector, nội dung chunk và metadata. Các cấu hình
+`DATABASE_URL`, `EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`,
+`TOP_K` và `SIMILARITY_THRESHOLD` được đọc từ biến môi trường trong
+`app/config/settings.py`; không dùng trực tiếp trong business logic.
+`.env.example` và `docker-compose.yml` cung cấp các giá trị mẫu.

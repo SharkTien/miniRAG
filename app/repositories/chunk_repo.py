@@ -9,6 +9,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from psycopg.types.json import Jsonb
 from app.config.database import DatabaseManager
+from app.config.settings import TOP_K
 
 logger = logging.getLogger("chunk_repo")
 
@@ -76,7 +77,7 @@ class ChunkRepository:
     def vector_search(
         self,
         query_embedding: List[float],
-        top_k: int = 10,
+        top_k: int = TOP_K,
         document_id: Optional[uuid.UUID] = None,
         min_similarity: float = 0.0,
         query_text: Optional[str] = None,

@@ -1,11 +1,12 @@
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field
+from app.config.settings import TOP_K
 
 
 class QueryRequest(BaseModel):
     """Provide the queryrequest application component."""
     question: str = Field(..., description="Question to answer from indexed documents")
-    top_k: Optional[int] = Field(5, description="Maximum number of retrieved chunks")
+    top_k: Optional[int] = Field(TOP_K, description="Maximum number of retrieved chunks")
     document_id: Optional[str] = Field(None, description="Optional document scope")
 
 

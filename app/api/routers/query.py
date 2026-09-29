@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.query import QueryRequest, QueryResponse
 from app.retrieval.rag_service import RagService
 from app.api.dependencies import get_rag_service
+from app.config.settings import TOP_K
 
 router = APIRouter(tags=["query"])
 logger = logging.getLogger("query_router")
@@ -42,7 +43,7 @@ def query_documents(
     try:
         result = rag_service.answer_question(
             question=payload.question,
-            top_k=payload.top_k or 5,
+            top_k=payload.top_k or TOP_K,
             document_id=payload.document_id,
         )
         return QueryResponse(**result)

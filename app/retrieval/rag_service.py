@@ -21,7 +21,7 @@ from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from app.config.settings import (
     NGC_API_KEY,
     NIM_BASE_URL,
-    LLM_RAG_MODEL,
+    LLM_MODEL,
     TOP_K,
 )
 from app.config.prompts import CHITCHAT_SYSTEM_PROMPT, GROUNDED_QA_SYSTEM_PROMPT
@@ -80,7 +80,7 @@ class RagService:
         self.retriever = retriever
         self.api_key = (api_key or NGC_API_KEY or "").strip()
         self.base_url = (base_url or NIM_BASE_URL or "https://integrate.api.nvidia.com/v1").rstrip("/")
-        self.model = model or LLM_RAG_MODEL or "meta/llama-3.3-70b-instruct"
+        self.model = model or LLM_MODEL
         self.evidence = EvidenceService()
 
     # ── Guardrail helper ───────────────────────────────────────────────────────

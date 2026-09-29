@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.api.dependencies import get_conversation_repo, get_rag_service
 from app.repositories.conversation_repo import ConversationRepository
 from app.retrieval.rag_service import RagService
+from app.config.settings import TOP_K
 
 logger = logging.getLogger("conversations_router")
 
@@ -23,7 +24,7 @@ class UpdateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Provide the sendmessagerequest application component."""
     question: str = Field(..., description="Question to answer")
-    top_k: Optional[int] = Field(default=10, ge=1, le=20, description="Maximum number of retrieved chunks")
+    top_k: Optional[int] = Field(default=TOP_K, ge=1, le=20, description="Maximum number of retrieved chunks")
     document_id: Optional[str] = Field(default=None, description="Optional document scope")
 
 @router.get("", summary="List conversations")
@@ -124,7 +125,7 @@ def send_message_in_conversation(
     try:
         rag_res = rag_service.answer_question(
             question=query_text,
-            top_k=payload.top_k or 10,
+            top_k=payload.top_k or TOP_K,
             document_id=payload.document_id
         )
         answer_text = rag_res.get("answer", "")

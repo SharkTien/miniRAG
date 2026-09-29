@@ -35,6 +35,9 @@ services:
       RAGFLOW_MODE: ${RAGFLOW_MODE:-deepdoc}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nvidia/nemotron-3-embed-1b}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
+      LLM_MODEL: ${LLM_MODEL:-meta/llama-3.2-11b-vision-instruct}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
       PERSIST_PAGE_VISUALS: ${PERSIST_PAGE_VISUALS:-true}
       PAGE_VISUAL_SCALE: ${PAGE_VISUAL_SCALE:-1.5}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -117,6 +120,9 @@ services:
       TESSERACT_PAGE_TIMEOUT_SECONDS: ${TESSERACT_PAGE_TIMEOUT_SECONDS:-90}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nvidia/nemotron-3-embed-1b}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
+      LLM_MODEL: ${LLM_MODEL:-meta/llama-3.2-11b-vision-instruct}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
       PERSIST_PAGE_VISUALS: ${PERSIST_PAGE_VISUALS:-true}
       PAGE_VISUAL_SCALE: ${PAGE_VISUAL_SCALE:-1.5}
       QWEN_BASE_URL: ${QWEN_BASE_URL:-http://host.docker.internal:8027/v1}

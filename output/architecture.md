@@ -40,6 +40,11 @@ sau đó `EvidenceService` kiểm tra lexical coverage/answerability. Chỉ evid
 đã được giới hạn token mới đi vào grounded prompt. Response luôn chứa nguồn gồm
 filename, chunk id, page và snippet.
 
+Các tham số vận hành được cấu hình qua environment: `DATABASE_URL`,
+`EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K` và
+`SIMILARITY_THRESHOLD`. Mã retrieval đọc các giá trị này từ
+`app/config/settings.py`.
+
 ## Lý do chọn công nghệ
 
 - FastAPI: API rõ schema, validation và dễ containerize.

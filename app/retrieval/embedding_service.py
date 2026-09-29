@@ -33,7 +33,7 @@ class EmbeddingService:
     ):
         self.api_key = (api_key or NGC_API_KEY or "").strip()
         self.base_url = (base_url or EMBEDDING_BASE_URL or "https://integrate.api.nvidia.com/v1").rstrip("/")
-        self.model = model or EMBEDDING_MODEL or "nvidia/nv-embedqa-e5-v5"
+        self.model = model or EMBEDDING_MODEL
         self.fallback_to_mock = fallback_to_mock
 
     def embed_texts(self, texts: List[str], input_type: str = "passage") -> List[List[float]]:

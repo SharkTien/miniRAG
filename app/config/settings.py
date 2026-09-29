@@ -106,10 +106,13 @@ EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "https://integrate.api.nvid
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/nemotron-3-embed-1b")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", str(DEFAULT_EMBEDDING_DIM)))
 TOP_K = int(os.getenv("TOP_K", str(DEFAULT_TOP_K)))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
 SIMILARITY_THRESHOLD = float(
     os.getenv("SIMILARITY_THRESHOLD", str(DEFAULT_SIMILARITY_THRESHOLD))
 )
-LLM_RAG_MODEL = os.getenv("LLM_RAG_MODEL", NIM_MODEL)
+LLM_MODEL = os.getenv("LLM_MODEL", os.getenv("LLM_RAG_MODEL", NIM_MODEL))
+LLM_RAG_MODEL = LLM_MODEL
 
 # Qwen semantic-normalization runtime configuration
 QWEN_BASE_URL = os.getenv("QWEN_BASE_URL", DEFAULT_QWEN_BASE_URL).rstrip("/")
