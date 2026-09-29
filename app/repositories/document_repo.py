@@ -51,6 +51,19 @@ class DocumentRepository:
             conn.execute("UPDATE documents SET status = 'processing', progress = 0, progress_stage = 'Bat dau xu ly' WHERE id = %s", (row[0],))
             return row[0]
 
+    def requeue_processing_documents(self):
+        """Return interrupted jobs to the queue after a worker restart."""
+        with self.db.connect() as conn:
+            result = conn.execute(
+                """UPDATE documents
+                   SET status = 'queued', progress = 0,
+                       progress_stage = 'Đang xếp hàng lại sau khi worker khởi động lại',
+                       error_message = NULL
+                 WHERE status = 'processing'"""
+            )
+            conn.commit()
+            return result.rowcount
+
     def get_document(self, doc_id, actor=None):
         """Return document."""
         with self.db.connect() as conn:

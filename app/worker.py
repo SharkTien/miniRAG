@@ -24,6 +24,9 @@ def main() -> None:
     # independently under Compose, so neither may assume the other starts first.
     database.init_db()
     repo = DocumentRepository(database)
+    recovered = repo.requeue_processing_documents()
+    if recovered:
+        print(f"Requeued {recovered} interrupted document(s)", flush=True)
     service = ExtractService(repo, StorageManager())
     while True:
         try:
