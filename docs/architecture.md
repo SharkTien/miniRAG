@@ -9,6 +9,8 @@ performs extraction and indexing so the upload request returns quickly.
 ```text
 Client
   │
+  ├── React/Vite + Nginx ──► backend API
+  │
   ├── POST /documents ──► MinIO (raw file) + PostgreSQL (metadata/state)
   │                                  │
   │                                  ▼
@@ -65,6 +67,7 @@ and `/api/documents`.
 
 | Component | Responsibility |
 | --- | --- |
+| React/Vite + Nginx | production UI và reverse proxy tới API |
 | FastAPI routers | health, upload, query, conversation and document lifecycle APIs |
 | PostgreSQL + pgvector | document metadata, chunks, embeddings and conversations |
 | MinIO | original files, visual crops and page snapshots |
@@ -80,8 +83,8 @@ and `/api/documents`.
 Runtime values are read from environment variables. Start from `.env.example`;
 do not commit `.env`, API keys or GitHub credentials. The important tuning
 values are `DOCUMENT_PARSER_ENGINE`, `SEMANTIC_NORMALIZER`,
-`PERSIST_PAGE_VISUALS`, `EMBEDDING_MODEL`, `TOP_K` and
-`SIMILARITY_THRESHOLD`.
+`PERSIST_PAGE_VISUALS`, `EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`,
+`CHUNK_OVERLAP`, `TOP_K` and `SIMILARITY_THRESHOLD`.
 
 The default parser path is local Docling/DeepDoc. RAGFlow server mode is an
 optional integration: install a compatible `ragflow-sdk` version separately

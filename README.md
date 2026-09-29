@@ -33,8 +33,16 @@ evaluation/       # retrieval verification và benchmark
 docs/             # architecture documentation
 ```
 
-Project là backend-only; test và demo thực hiện bằng terminal, cURL hoặc
-Swagger tại `/docs`.
+Backend có thể kiểm thử bằng terminal, cURL hoặc Swagger tại `/docs`; frontend
+production được chạy riêng trong service Nginx.
+
+## Công nghệ sử dụng
+
+- FastAPI và Python 3.12 cho API/worker.
+- PostgreSQL + pgvector cho metadata, chunk và embedding.
+- MinIO cho file gốc và bằng chứng trực quan.
+- React/Vite và Nginx cho giao diện production.
+- GitHub Actions cho lint, test, build và smoke test.
 
 ## Chạy bằng Docker
 
@@ -45,12 +53,14 @@ docker compose up -d --build
 ```
 
 - API: http://localhost:41873
+- Frontend: http://localhost:4173
 - Swagger: http://localhost:41873/docs
 - MinIO Console: http://localhost:41901
 - Health: http://localhost:41873/health
 
-Đây là backend-only service; không yêu cầu frontend. Có thể kiểm thử bằng cURL,
-Swagger hoặc các test terminal. MinIO Console chạy tại `41901`; có thể đổi bằng
+Frontend production được phục vụ qua Nginx và chuyển tiếp các request API tới
+backend. API cũng có thể kiểm thử độc lập bằng cURL, Swagger hoặc test
+terminal. MinIO Console chạy tại `41901`; có thể đổi bằng
 `APP_PORT` và `MINIO_CONSOLE_PORT` trong `.env`. Tài liệu upload tối đa 200
 MB/file, được lưu tại bucket `ntc-documents` dưới prefix `raw/<document-id>/`;
 PostgreSQL chỉ lưu metadata, checksum SHA-256 và trạng thái ingestion.
