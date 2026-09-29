@@ -12,7 +12,7 @@ Ngày ghi nhận: `2026-09-28`.
 | Compose schema/interpolation | `docker compose config --quiet` | PASS |
 | Frontend build | `npm ci` + `npm run build` trong `frontend/` | PASS |
 | Frontend Docker image | `docker build -t mini-rag-frontend:ci frontend` | PASS |
-| Compose smoke run | API `/health` + frontend `/` + teardown | PASS — API/frontend CI-equivalent run |
+| Compose smoke run | API `/health` + frontend `/` + teardown | API PASS; full local run blocked by stale Docker network collision |
 | Retrieval verification | `retrieval_verification.csv` | PASS — 10/10 |
 | Repository quality gate | `python tools/quality_gate.py` | PASS — 100/100 |
 
@@ -38,5 +38,7 @@ Python host. Đã cài đúng `requirements-dev.txt` cùng các dependency runti
 cần cho test; không sửa source code để làm test pass. CI thực hiện cả việc tạo
 CI được cấu hình để tạo API và frontend image, chạy smoke test bằng Docker
 Compose, gọi `/health` và trang frontend rồi dọn container/volume. Chuỗi tương
-đương đã được kiểm tra cục bộ; GitHub Actions đã được kích hoạt cho các commit
-trên nhánh `main` và đang chạy các workflow mới nhất.
+đương cho API đã được kiểm tra cục bộ. Frontend build và frontend Docker image
+đã đạt; lần Compose đầy đủ tại máy hiện tại bị chặn bởi network Docker cũ
+`mini_rag_default` chiếm dải địa chỉ. GitHub Actions đã được kích hoạt cho các
+commit trên nhánh `main`.

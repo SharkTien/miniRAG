@@ -2,7 +2,7 @@
 
 | Yêu cầu trong `SUBJECT.md` | Bằng chứng | Trạng thái |
 |---|---|---|
-| Docker Compose khởi chạy service | `docker-compose.yml`, API/frontend Dockerfile; Compose config và smoke test API/frontend | PASS local |
+| Docker Compose khởi chạy service | `docker-compose.yml`, API/frontend Dockerfile; Compose config và smoke test API | API PASS; frontend Compose runner đang xác nhận |
 | Upload PDF, TXT, DOCX | `app/config/settings.py` (`ALLOWED_EXTENSIONS`), `app/api/routers/documents.py` | PASS |
 | Extract và clean dữ liệu | `app/ingestion/extract_service.py`, `app/ingestion/normalize_service.py` | PASS |
 | Chunk dữ liệu | `NormalizeService.chunk_elements`; unit test trong `tests/test_core_components.py` | PASS |
