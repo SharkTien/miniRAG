@@ -62,16 +62,19 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:latest
+    # The upstream MinIO images are no longer anonymously pullable from the
+    # old quay.io reference.  Bitnami Legacy publishes a compatible S3 server
+    # image for reproducible CI and local Compose runs.
+    image: bitnamilegacy/minio:latest
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: server /bitnami/minio/data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
     ports:
       - "${MINIO_CONSOLE_PORT:-41901}:9001"
     volumes:
-      - minio_data:/data
+      - minio_data:/bitnami/minio/data
 
   ntc_document_rag_worker:
     build: .
