@@ -8,12 +8,15 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.graphics.shapes import Drawing, Line, Polygon, Rect, String
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
     HRFlowable,
+    Image,
     KeepTogether,
     PageBreak,
     PageTemplate,
@@ -109,6 +112,57 @@ def p(text: str, style: ParagraphStyle) -> Paragraph:
 def rich(text: str, style: ParagraphStyle) -> Paragraph:
     """Create a paragraph for intentionally limited inline markup."""
     return Paragraph(text, style)
+
+
+def evidence_image(path: Path, caption: str, regular: str, width: float = 166 * mm):
+    """Return a bounded screenshot with a Vietnamese caption."""
+    reader = ImageReader(str(path))
+    image_width, image_height = reader.getSize()
+    height = width * image_height / image_width
+    image = Image(str(path), width=width, height=height)
+    image.hAlign = "CENTER"
+    caption_style = ParagraphStyle(
+        "ImageCaption",
+        fontName=regular,
+        fontSize=8,
+        leading=10.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#475569"),
+        spaceBefore=3,
+        spaceAfter=9,
+    )
+    return KeepTogether([image, Paragraph(escape(caption), caption_style)])
+
+
+def pipeline_diagram(regular: str) -> Drawing:
+    """Draw the end-to-end data and retrieval flow as a clean vector diagram."""
+    drawing = Drawing(510, 172)
+    labels = [
+        ("Tài liệu", "PDF / DOCX / TXT"),
+        ("Trích xuất", "Docling + OCR"),
+        ("Chuẩn hóa", "làm sạch + chia đoạn"),
+        ("Lưu trữ", "vector + metadata"),
+        ("Truy xuất", "từ khóa + ngữ nghĩa"),
+        ("Trả lời", "bằng chứng + mô hình"),
+    ]
+    colors_fill = ["#E0F2FE", "#DBEAFE", "#DCFCE7", "#FEF3C7", "#FCE7F3", "#EDE9FE"]
+    box_w, box_h, gap = 76, 48, 9
+    start_x = 4
+    y = 92
+    for idx, ((title, subtitle), fill) in enumerate(zip(labels, colors_fill)):
+        x = start_x + idx * (box_w + gap)
+        drawing.add(Rect(x, y, box_w, box_h, rx=7, ry=7, fillColor=colors.HexColor(fill), strokeColor=colors.HexColor("#64748B"), strokeWidth=0.8))
+        drawing.add(String(x + box_w / 2, y + 29, title, fontName="ReportSans-Bold", fontSize=8.2, fillColor=colors.HexColor("#0F172A"), textAnchor="middle"))
+        drawing.add(String(x + box_w / 2, y + 14, subtitle, fontName=regular, fontSize=6.4, fillColor=colors.HexColor("#334155"), textAnchor="middle"))
+        if idx < len(labels) - 1:
+            next_x = x + box_w + 1
+            arrow_x = x + box_w + gap - 1
+            drawing.add(Line(next_x, y + box_h / 2, arrow_x, y + box_h / 2, strokeColor=colors.HexColor("#0F3D5E"), strokeWidth=1.2))
+            drawing.add(Polygon([arrow_x, y + box_h / 2, arrow_x - 5, y + box_h / 2 + 3, arrow_x - 5, y + box_h / 2 - 3], fillColor=colors.HexColor("#0F3D5E"), strokeColor=None))
+    drawing.add(String(255, 58, "Mỗi đoạn giữ mã tài liệu, số trang, loại dữ liệu và thông tin nguồn để truy ngược", fontName=regular, fontSize=7.4, fillColor=colors.HexColor("#475569"), textAnchor="middle"))
+    drawing.add(Line(4, 45, 506, 45, strokeColor=colors.HexColor("#CBD5E1"), strokeWidth=0.6))
+    drawing.add(String(255, 27, "Luồng tải tài liệu và luồng hỏi đáp dùng chung lớp metadata và bằng chứng", fontName="ReportSans-Bold", fontSize=8, fillColor=colors.HexColor("#176B87"), textAnchor="middle"))
+    return drawing
 
 
 def table(data, widths, regular, header=True, small=False):
@@ -305,13 +359,14 @@ def build():
         rich("BÁO CÁO BÀN GIAO", styles["CoverSub"]),
         Spacer(1, 7 * mm),
         rich("Mini RAG Service", styles["CoverTitle"]),
-        rich("Milestone, acceptance criteria, evaluation và nghiên cứu xử lý dữ liệu", styles["CoverSub"]),
+        rich("Các mốc, tiêu chí nghiệm thu, tiêu chí đánh giá và nghiên cứu xử lý dữ liệu", styles["CoverSub"]),
         Spacer(1, 15 * mm),
         HRFlowable(width="65%", thickness=2, color=colors.HexColor("#F59E0B"), hAlign="CENTER"),
         Spacer(1, 15 * mm),
-        rich("Vai trò trình bày: Data Engineer / Data Scientist", styles["CoverSub"]),
+        rich("Vai trò trình bày: kỹ sư dữ liệu / nhà khoa học dữ liệu", styles["CoverSub"]),
         rich("Ngày cập nhật: 30/09/2026", styles["CoverSub"]),
-        rich("Source commit: 05185d9", styles["CoverSub"]),
+        rich("Mã commit: 05185d9", styles["CoverSub"]),
+        rich('<link href="https://github.com/SharkTien/miniRAG" color="#176B87">Kho mã nguồn trên GitHub: github.com/SharkTien/miniRAG</link>', styles["CoverSub"]),
         Spacer(1, 25 * mm),
         rich("Tài liệu này nhấn mạnh cách dữ liệu được khảo sát, đo lường, chuẩn hóa và đưa vào quyết định kỹ thuật của hệ thống RAG.", styles["Callout"]),
         PageBreak(),
@@ -333,25 +388,35 @@ def build():
         story.append(Paragraph("• " + escape(text), styles["BulletVi"]))
 
     h1("1. Tóm tắt điều hành")
-    body("Báo cáo đối chiếu source commit 05185d9 với bốn milestone trong SUBJECT.md. Điểm nhấn được bổ sung là nghiên cứu dữ liệu: phân loại nội dung, kiểm tra chất lượng sau extract/OCR, benchmark theo loại dữ liệu và truy vết quyết định đưa vào production.")
-    body("Trên bộ 5 PDF SynthDocQA với 877 câu hỏi, cấu hình tốt nhất đạt document hit 90,65%, content hit 41,33% và assertion pass 23,72%. Đây là số liệu benchmark chuyên biệt, không phải cam kết cho mọi tài liệu production.")
-    story.append(rich("Điểm cần reviewer quan sát: hệ thống không chỉ chọn mô hình rồi đo điểm tổng. Quy trình đã tách lỗi trích xuất, lỗi lập chỉ mục và lỗi truy xuất; sau đó dùng kết quả theo Table, Form, Figure, Annotation và Text để thay đổi pipeline.", styles["Callout"]))
+    body("Báo cáo đối chiếu mã commit 05185d9 với bốn mốc trong SUBJECT.md. Trọng tâm là nghiên cứu dữ liệu: phân loại nội dung, kiểm tra chất lượng sau trích xuất/OCR, đánh giá theo loại dữ liệu và truy vết quyết định đưa vào hệ thống.")
+    body("Trên bộ 5 PDF SynthDocQA với 877 câu hỏi, cấu hình tốt nhất tìm đúng tài liệu 90,65%, tìm đúng nội dung 41,33% và đạt đúng mệnh đề 23,72%. Đây là số liệu của bộ đánh giá chuyên biệt, không phải cam kết cho mọi tài liệu thực tế.")
+    story.append(rich("Điểm cần xem trong báo cáo: dữ liệu được khảo sát trước khi chọn cách xử lý; lỗi trích xuất, lỗi lập chỉ mục và lỗi truy xuất được tách riêng; kết quả theo bảng, biểu mẫu, hình, chú thích và văn bản được dùng để thay đổi luồng xử lý.", styles["Callout"]))
 
-    h1("2. Milestones")
-    h2("Milestone 1 — Data Pipeline")
-    body("Đã hoàn thành upload, kiểm tra định dạng, lưu MinIO, extract PDF/TXT/DOCX và định dạng mở rộng, OCR NVIDIA cho scan/ảnh, làm sạch, semantic normalization có timeout/fallback, chunking, embedding theo batch, lưu pgvector và worker nền.")
-    bullet("Bổ sung hồ sơ nghiên cứu dữ liệu tại docs/report.md.")
-    bullet("Phân loại 877 câu hỏi theo Table 299, Form 107, Figure 159, Annotation 285 và Text 27.")
-    bullet("So sánh OCR, candidate multiplier, hybrid retrieval, xử lý bảng, hình và annotation bằng cùng một bộ câu hỏi.")
-    bullet("Đưa kết quả vào các quyết định: OCR toàn trang, chunk bảng có cấu trúc, provenance theo trang, hybrid retrieval và evidence filtering.")
-    h2("Milestone 2 — RAG API")
-    body("Query API, query planning, full-text/BM25 kết hợp dense vector, mở rộng tập ứng viên, lọc danh tính tài liệu, xếp hạng evidence, prompt có grounding, source citation và streaming đã có trong source.")
-    h2("Milestone 3 — Docker & CI")
-    body("Dockerfile, Compose cho API/worker/PostgreSQL + pgvector/MinIO/frontend, .env.example và GitHub Actions đã có. Local quality gate đạt 98,8/100; workflow commit 05185d9 đang chờ runner hoàn tất tại thời điểm lập báo cáo.")
-    h2("Milestone 4 — Documentation & Demo")
-    body("README, architecture, API examples, demo script, traceability, retrieval verification và báo cáo PDF này đã được bàn giao.")
+    h1("2. Sơ đồ luồng dữ liệu")
+    story.append(pipeline_diagram(regular))
+    body("Khi tải tài liệu, hệ thống lưu file gốc, trích xuất bố cục, nhận dạng phần chữ trên bản quét, làm sạch và chia thành các đoạn có nguồn gốc. Mỗi đoạn được tạo vector và lưu cùng metadata trong PostgreSQL. Khi đặt câu hỏi, hệ thống kết hợp tìm kiếm từ khóa và vector, lọc bằng chứng rồi mới gửi phần ngữ cảnh đã chọn tới mô hình sinh.")
 
-    h1("3. Nghiên cứu và xử lý dữ liệu")
+    h1("3. Các mốc thực hiện")
+    h2("Mốc 1 — Luồng dữ liệu")
+    body("Đã hoàn thành tải tài liệu, kiểm tra định dạng, lưu MinIO, trích xuất PDF/TXT/DOCX và định dạng mở rộng, OCR NVIDIA cho bản quét/ảnh, làm sạch, chuẩn hóa ngữ nghĩa có giới hạn thời gian, chia đoạn, tạo vector theo lô, lưu pgvector và xử lý nền.")
+    bullet("Hồ sơ nghiên cứu dữ liệu nằm tại docs/report.md.")
+    bullet("877 câu hỏi được phân loại theo bảng, biểu mẫu, hình, chú thích và văn bản.")
+    bullet("Các phương án OCR, mở rộng tập ứng viên, tìm kiếm kết hợp, xử lý bảng, hình và chú thích được chạy trên cùng bộ câu hỏi.")
+    h2("Mốc 2 — API hỏi đáp")
+    body("API hỏi đáp, lập kế hoạch truy vấn, tìm kiếm toàn văn kết hợp vector, mở rộng tập ứng viên, lọc danh tính tài liệu, xếp hạng bằng chứng, lời nhắc bám nguồn, trích dẫn nguồn và trả kết quả từng phần đã có trong mã nguồn.")
+    h2("Mốc 3 — Đóng gói và kiểm tra tự động")
+    body("Dockerfile, Docker Compose cho API, tiến trình nền, PostgreSQL + pgvector, MinIO và giao diện, tệp .env.example và quy trình GitHub Actions đã có. Cổng chất lượng trên máy phát triển đạt 98,8/100; ảnh chụp quy trình nằm ở phần bằng chứng.")
+    h2("Mốc 4 — Tài liệu và trình diễn")
+    body("README, tài liệu kiến trúc, ví dụ API, kịch bản trình diễn, truy vết yêu cầu, bảng kiểm tra truy xuất và báo cáo PDF này được bàn giao.")
+
+    h1("4. Bằng chứng trực quan từ hệ thống")
+    body("Các ảnh dưới đây được lấy từ quá trình chạy thật trong repository. Chúng minh họa đường đi của dữ liệu và cấu trúc lưu trữ, không chỉ là sơ đồ khái niệm.")
+    story.append(evidence_image(ROOT / "output/images/docker_CICD.png", "Hình 1. Quy trình kiểm tra tự động sau lần đẩy mã 975ec77: hai nhánh quality và frontend hoàn tất trước bước docker; toàn bộ quy trình có trạng thái Success và thời lượng 7 phút 10 giây.", regular))
+    story.append(evidence_image(ROOT / "output/images/pgvector.png", "Hình 2. Cấu trúc PostgreSQL/pgvector: bảng document_chunks có content dạng text, metadata dạng jsonb, embedding vector(2048), khóa liên kết document_id và chỉ mục theo tài liệu.", regular))
+    story.append(evidence_image(ROOT / "output/images/upload.png", "Hình 3. Giao diện kho tài liệu sau khi tải lên: sáu tài liệu đã xuất hiện, tài liệu Shopee được chọn, bản xem trước PDF và phần văn bản đã định dạng được hiển thị cùng số lượng chunk.", regular, width=166 * mm))
+    story.append(evidence_image(ROOT / "output/images/chunk.png", "Hình 4. Màn hình xem chunk: nội dung được chia thành các đoạn có thứ tự, giữ tiêu đề, trang và văn bản liên quan để bước truy xuất có thể chọn đúng phần.", regular, width=130 * mm))
+
+    h1("5. Nghiên cứu và xử lý dữ liệu")
     h2("3.1 Hồ sơ dữ liệu")
     body("Benchmark gồm 877 câu hỏi trên 5 PDF. Bảng chiếm 299 câu, biểu mẫu 107, hình 159, chú thích/đánh dấu 285 và văn bản thường 27. Việc phân loại giúp không dùng một chiến lược chunk/OCR cho mọi loại nội dung.")
     story.append(table([
@@ -385,55 +450,109 @@ def build():
     bullet("Chú thích: không mặc định dùng OCR lát cắt cố định; cần detector theo hình học và quan hệ vùng đánh dấu.")
     bullet("Truy xuất: kết hợp dense và lexical, mở rộng tập ứng viên rồi mới rerank theo khả năng trả lời.")
 
-    h1("4. Acceptance criteria")
+    h1("6. Kiểm thử đơn vị và kiểm thử API")
+    body("Lệnh kiểm tra chính là ruff check app tests, python -m compileall -q app tests và python -m pytest -q tests. Kết quả gần nhất: 22 kiểm thử đạt; kiểm thử gọi dịch vụ NVIDIA trực tiếp được bỏ qua khi môi trường không có khóa API, còn các kiểm thử ngoại tuyến vẫn chạy bình thường.")
     story.append(table([
-        ["Tiêu chí", "Trạng thái", "Bằng chứng"],
-        ["Docker Compose chạy được", "Đạt", "docker-compose.yml; local stack"],
-        ["Upload PDF, TXT, DOCX", "Đạt", "Upload API và allowed extensions"],
-        ["Extract, chunk, embedding", "Đạt", "Ingestion worker"],
-        ["Vector + metadata", "Đạt", "PostgreSQL + pgvector"],
-        ["Query có source", "Đạt", "QueryResponse.sources"],
-        ["Config tách business logic", "Đạt", ".env.example và settings"],
-        ["Unit/API test", "Đạt", "22 test local"],
-        ["CI pipeline", "Chờ xác nhận", "Commit mới nhất đang in_progress"],
-        ["Retrieval verification", "Đạt", "10 câu trong output"],
-        ["README + architecture", "Đạt", "root docs và output"],
-    ], [65 * mm, 30 * mm, 65 * mm], regular, small=True))
-    body("Acceptance chỉ đóng hoàn toàn sau khi GitHub Actions của commit hiện tại kết thúc thành công. Các kiểm tra local đã pass.")
+        ["Tệp kiểm thử", "Nội dung kiểm tra", "Bằng chứng"],
+        ["test_core_components.py", "Cấu hình, làm sạch ký tự, chia đoạn giữ trang/section, chuẩn hóa bbox", "4 kiểm thử"],
+        ["test_api.py", "Đường dẫn sức khỏe, hỏi đáp có nguồn, câu hỏi rỗng, không có bằng chứng, định dạng file và trạng thái queued", "6 kiểm thử"],
+        ["test_evidence_service.py", "Loại đoạn chỉ giống chủ đề, giữ đoạn đủ dữ kiện và bảo đảm tên file không làm đổi điểm nội dung", "3 kiểm thử"],
+        ["test_ocr_routing.py", "Đường tắt PDF có lớp chữ, sửa dấu tiếng Việt, chống mở rộng bịa đặt, giữ bbox và chính sách nhà cung cấp", "5 kiểm thử"],
+        ["test_nim_parallel.py", "Đọc cấu hình, chia trang, kiểm tra chống bịa đặt; gọi NVIDIA trực tiếp là phần tùy chọn", "3 kiểm thử ngoại tuyến + 1 tùy chọn"],
+        ["test_query_rag.py", "Bộ kiểm tra truy xuất cục bộ và tạo vector phục vụ kiểm chứng thủ công", "Tập kiểm tra bổ sung"],
+    ], [42 * mm, 100 * mm, 34 * mm], regular, small=True))
+    body("Kiểm thử API dùng dịch vụ giả lập để kiểm tra hợp đồng phản hồi: câu trả lời phải đi kèm sources; câu hỏi rỗng phải bị từ chối; truy vấn không có bằng chứng không được sinh nguồn giả; file không hỗ trợ phải trả lỗi; upload hợp lệ phải trả trạng thái queued.")
 
-    h1("5. Evaluation criteria")
+    h1("7. Cấu hình và nguồn sự thật")
+    body("Cấu hình được tách khỏi mã nghiệp vụ. Tệp .env.example chỉ chứa giá trị mẫu; giá trị thật nằm trong .env và không được đưa vào mã commit. app/config/settings.py đọc biến môi trường, kiểm tra kiểu dữ liệu và cung cấp giá trị mặc định cho máy phát triển.")
+    story.append(table([
+        ["Nhóm", "Biến cấu hình", "Tác dụng"],
+        ["Kết nối", "DATABASE_URL, POSTGRES_DB, POSTGRES_USER", "Kết nối PostgreSQL/pgvector và tên cơ sở dữ liệu"],
+        ["Mô hình", "EMBEDDING_MODEL, EMBEDDING_DIM, LLM_MODEL", "Mô hình tạo vector, số chiều và mô hình sinh"],
+        ["Chia đoạn", "CHUNK_SIZE, CHUNK_OVERLAP", "Kích thước đoạn và phần chồng lấn"],
+        ["Truy xuất", "TOP_K, RETRIEVAL_CANDIDATE_MULTIPLIER, SIMILARITY_THRESHOLD", "Số bằng chứng, tập ứng viên và ngưỡng lọc"],
+        ["OCR", "NVIDIA_OCR_MODEL, NVIDIA_OCR_TIMEOUT_SECONDS, NVIDIA_OCR_BATCH_SIZE", "Mô hình, thời gian chờ và kích thước lô OCR"],
+        ["Chuẩn hóa", "NIM_MODEL, NIM_REQUEST_TIMEOUT_SECONDS, NIM_MAX_RETRIES", "Mô hình ngữ nghĩa, thời gian chờ và số lần thử lại"],
+    ], [35 * mm, 78 * mm, 63 * mm], regular, small=True))
+    body("Khi triển khai, chỉ cần thay .env và khởi động lại dịch vụ. Luồng xử lý không cần sửa mã nguồn để đổi mô hình, kích thước đoạn, số lượng kết quả hay thời gian chờ.")
+
+    h1("8. Đánh giá từng trường hợp kiểm tra truy xuất")
+    body("Bảng tính output/retrieval_verification.xlsx có 8 câu hỏi có dữ liệu; hai dòng cuối để trống nên không được tính là trường hợp kiểm tra. Cách đánh giá: Đạt khi câu trả lời chứa đủ ý chính và không mâu thuẫn; Đạt một phần khi có ý chính nhưng thiếu điều kiện hoặc thêm thông tin chưa có căn cứ; Chưa đạt khi mâu thuẫn với đáp án hoặc bỏ sót dữ kiện quyết định.")
+    retrieval_cases = [
+        ("1. Hoàn tiền bằng thẻ NAPAS", "Đạt một phần", "Đã trả đúng mốc 2–5 ngày làm việc và đúng phương thức hoàn về thẻ NAPAS. Còn thiếu điều kiện mốc tính từ lúc Shopee xác nhận đã hoàn tiền và phần minh họa ngày làm việc."),
+        ("2. Shop giao sai hàng và phí trả hàng", "Đạt", "Đã phân biệt lấy tại nhà, gửi tại bưu cục và tự sắp xếp; nêu điều kiện chấp nhận và mã vận đơn. Đây là câu trả lời đáp ứng các ý chính trong đáp án kiểm tra."),
+        ("3. Đổi riêng áo lỗi trong một bộ", "Chưa đạt", "Câu trả lời khẳng định được gửi riêng áo và hoàn tiền toàn bộ, trong khi bằng chứng không đủ để kết luận có tách bộ hay không. Đây là lỗi suy diễn vượt nguồn."),
+        ("4. Phụ kiện Adore có được đổi không", "Chưa đạt", "Câu trả lời khẳng định chắc chắn được đổi trong 7 ngày, trong khi đáp án yêu cầu nêu rõ phần chính sách cung cấp chưa xác định được trường hợp phụ kiện. Đây là lỗi trộn bảo hành với đổi hàng."),
+        ("5. Bảo hành biến tần GD100-PV", "Đạt một phần", "Đã nêu đúng thời hạn 1,5 năm và mốc tính từ ngày giao hàng. Phần điều kiện, địa điểm và mô tả phụ thêm không có căn cứ nên cần loại bỏ khi trả lời người dùng."),
+        ("6. Inverter gửi tới Nguyễn Văn Quá", "Chưa đạt", "Chưa trả đúng thời gian 24 giờ làm việc, chưa nêu quy trình báo giá khi máy nứt vỡ và chỉ trả một phần thông tin cước. Đây là thiếu dữ kiện quyết định."),
+        ("7. Hotline khiếu nại Kamereo", "Đạt một phần", "Đã trả đúng số 0812 46 37 27. Các mốc 4 giờ, 8 giờ và yêu cầu bổ sung cần được giữ lại chỉ khi có đúng chunk chính sách làm căn cứ."),
+        ("8. Rau củ dập úng sau 14 giờ", "Đạt", "Đã trả đúng nguyên tắc không trừ tiền ngay, chỉ đổi hoặc bù ở đơn tiếp theo và yêu cầu gửi thông tin, hình ảnh để xác minh."),
+    ]
+    for title, verdict, explanation in retrieval_cases:
+        story.append(KeepTogether([
+            Paragraph(escape(title), styles["ReportH2"]),
+            rich(f"<b>Kết luận kiểm tra:</b> {escape(verdict)}", styles["BodyVi"]),
+            p(explanation, styles["BodyVi"]),
+        ]))
+    body("Kết quả tổng hợp: 2/8 câu đạt đầy đủ, 3/8 câu đạt một phần và 3/8 câu chưa đạt. Các trường hợp chưa đạt đều liên quan đến việc mô hình suy diễn khi bằng chứng thiếu hoặc trộn hai chính sách khác nhau; đây là lý do hệ thống phải giữ lọc tài liệu, chấm khả năng trả lời và bắt buộc trích nguồn.")
+
+    h1("9. Cách tạo source trong câu trả lời")
+    body("Source không do mô hình sinh tự đặt ra. RagService lấy source từ những chunk đã vượt qua truy xuất kết hợp, lọc danh tính tài liệu, phân bố điểm và xếp hạng bằng chứng. Với mỗi chunk được chọn, hệ thống tạo một khối bằng chứng có tên file, mã chunk và trang trước khi gọi mô hình.")
+    story.append(table([
+        ["Trường trong source", "Ý nghĩa"],
+        ["file_name, document_id", "Tài liệu và bản ghi tài liệu gốc"],
+        ["chunk_id, page, page_start, page_end", "Đoạn và vị trí có thể mở lại để kiểm tra"],
+        ["dense_score, bm25_score, similarity_score", "Điểm vector, điểm từ khóa và điểm tương đồng"],
+        ["query_compatibility_score, answerability_score", "Mức phù hợp với câu hỏi và khả năng chứa dữ kiện trả lời"],
+        ["source_locator, element_ids, section", "Vị trí, phần tử bố cục và mục nội dung"],
+        ["extraction_method, ocr_confidence, snippet", "Cách lấy dữ liệu, độ tin cậy OCR và đoạn xem nhanh"],
+    ], [62 * mm, 116 * mm], regular, small=True))
+    body("Trong prompt, bằng chứng được đánh dấu dạng [EVIDENCE #... | File... | Chunk... | Trang...]. Sau khi mô hình sinh câu trả lời, API trả lại answer cùng mảng sources; nếu không có bằng chứng thì sources rỗng và hệ thống không dựng nguồn giả.")
+
+    h1("10. Bằng chứng nghiệm thu")
+    h2("Mã nguồn và đóng gói")
+    body("Dockerfile và docker-compose.yml mô tả API, tiến trình nền, PostgreSQL + pgvector, MinIO và giao diện. Lệnh docker compose config --quiet kiểm tra cú pháp trước khi chạy; ảnh Hình 1 cho thấy quy trình quality, frontend và docker đã chạy thành công trên GitHub Actions ở commit 975ec77.")
+    h2("Tải và xử lý tài liệu")
+    body("POST /documents nhận PDF, TXT và DOCX, ghi bản ghi queued rồi để tiến trình nền trích xuất, làm sạch, chia đoạn, tạo vector và lưu metadata. Hình 3 cho thấy tài liệu xuất hiện trong kho; Hình 4 cho thấy đoạn văn sau khi chia. Kiểm thử API xác nhận file không hỗ trợ bị từ chối và file hợp lệ trả queued.")
+    h2("Lưu vector và metadata")
+    body("Hình 2 là bằng chứng trực tiếp từ PostgreSQL: document_chunks có content, metadata jsonb và embedding vector(2048), cùng khóa ngoại về documents. File gốc nằm ở MinIO; object_key trong documents liên kết bản ghi với file.")
+    h2("API hỏi đáp và nguồn")
+    body("POST /query trả answer cùng sources; POST /query/stream gửi token trước rồi gửi metadata nguồn. Kiểm thử API bao phủ câu hỏi hợp lệ, câu hỏi rỗng và câu hỏi không có bằng chứng. Nguồn được tạo từ chunk đã chọn, không phải văn bản do mô hình tự đặt.")
+    h2("Kiểm tra tự động và tài liệu")
+    body("Ruff, biên dịch, 22 kiểm thử, bản dựng giao diện và kiểm tra Docker là các bằng chứng có thể chạy lại. README, tài liệu kiến trúc, hồ sơ nghiên cứu dữ liệu và bảng kiểm tra truy xuất liên kết trực tiếp tới mã nguồn hoặc tệp kết quả. Quy trình CI của commit mới nhất cần được xác nhận lại sau khi đẩy thay đổi hiện tại.")
+
+    h1("11. Tiêu chí đánh giá")
     story.append(table([
         ["Hạng mục", "Trọng số", "Tự đánh giá", "Căn cứ"],
-        ["Data ingestion & processing", "20%", "19/20", "12 điểm ingestion + 8 điểm nghiên cứu/chuẩn hóa trong docs/report.md"],
-        ["Vector Database & Retrieval", "20%", "19/20", "pgvector, BM25, dense, candidate pool, evidence"],
-        ["AI / RAG Integration", "15%", "14/15", "NVIDIA OCR/NIM, grounding, streaming, source"],
-        ["Docker & Environment", "15%", "15/15", "Dockerfile, Compose, env, stack local"],
-        ["CI", "10%", "9/10", "Workflow có đủ bước, chờ runner mới"],
-        ["Testing", "10%", "10/10", "22 test và quality gate"],
-        ["Documentation & Demo", "10%", "10/10", "README, architecture, demo, PDF"],
-        ["Tổng", "100%", "96/100", "Điểm tự đánh giá, chờ reviewer"],
+        ["Trích xuất và xử lý dữ liệu", "20%", "19/20", "Hồ sơ docs/report.md, ảnh upload/chunk, so sánh OCR và xử lý theo loại dữ liệu"],
+        ["Cơ sở dữ liệu vector và truy xuất", "20%", "19/20", "Ảnh pgvector, tìm kiếm từ khóa + vector, tập ứng viên và xếp hạng bằng chứng"],
+        ["Tích hợp AI/RAG", "15%", "14/15", "OCR NVIDIA, tạo vector, lời nhắc bám nguồn, trả kết quả từng phần và nguồn"],
+        ["Docker và môi trường", "15%", "15/15", "Dockerfile, Compose, biến môi trường và ảnh quy trình chạy"],
+        ["Quy trình kiểm tra tự động", "10%", "9/10", "Ảnh GitHub Actions; cần xác nhận lần chạy của mã hiện tại"],
+        ["Kiểm thử", "10%", "10/10", "22 kiểm thử đơn vị/API và kiểm tra chống bịa đặt"],
+        ["Tài liệu và trình diễn", "10%", "10/10", "README, kiến trúc, hồ sơ nghiên cứu, PDF và bảng truy xuất"],
+        ["Tổng tự đánh giá", "100%", "96/100", "Điểm tham khảo, cần reviewer xác nhận"],
     ], [47 * mm, 18 * mm, 22 * mm, 73 * mm], regular, small=True))
-    story.append(rich("Phần nghiên cứu dữ liệu nằm trong 20% Data ingestion & processing: khảo sát loại dữ liệu, thiết kế tập đánh giá, so sánh phương án, phân tích lỗi, ghi quyết định và tái đưa kết quả vào cấu hình production.", styles["Callout"]))
+    story.append(rich("Phần nghiên cứu dữ liệu nằm trong 20% trích xuất và xử lý dữ liệu: khảo sát loại dữ liệu, thiết kế tập đánh giá, so sánh phương án, phân tích lỗi, ghi quyết định và đưa kết quả trở lại cấu hình vận hành.", styles["Callout"]))
 
-    h1("6. Bonus")
+    h1("12. Điểm cộng")
     story.append(table([
-        ["Bonus", "Trạng thái", "Bằng chứng"],
-        ["Hybrid Search / full-text + vector", "Đạt", "PostgreSQL full-text + pgvector"],
-        ["Reranking và tối ưu retrieval", "Đạt", "EvidenceService, planner, candidate multiplier"],
-        ["CSV/XLSX", "Đạt", "Extraction routing"],
-        ["Background worker và retry", "Đạt", "PostgreSQL queue, retry/fallback"],
-        ["API xóa và danh sách tài liệu", "Đạt", "DELETE/GET documents"],
-        ["Đổi tên, hủy job, streaming", "Đạt", "API và frontend"],
-        ["Data research dossier", "Đạt", "docs/report.md và evaluation artifacts"],
-    ], [58 * mm, 28 * mm, 74 * mm], regular, small=True))
-    body("Bonus chỉ có giá trị sau khi yêu cầu cơ bản ổn định. Với OCR, embedding và LLM hosted, cần xác nhận thêm trong môi trường triển khai thật.")
+        ["Nội dung mở rộng", "Bằng chứng trong mã nguồn"],
+        ["Tìm kiếm kết hợp và xếp hạng lại", "PostgreSQL toàn văn, pgvector và EvidenceService"],
+        ["Hỗ trợ CSV/XLSX", "Bộ định tuyến trích xuất theo phần mở rộng"],
+        ["Tiến trình nền, thử lại và khôi phục", "Hàng đợi PostgreSQL, thử lại NIM và đưa job lỗi về hàng đợi"],
+        ["API xóa, danh sách, đổi tên và hủy", "Các đường dẫn tài liệu trong app/api/routers/documents.py"],
+        ["Trả kết quả từng phần", "Các đường dẫn /query/stream"],
+        ["Nghiên cứu dữ liệu theo loại", "docs/report.md, ảnh minh chứng và bảng đánh giá"],
+    ], [75 * mm, 85 * mm], regular, small=True))
+    body("Các nội dung mở rộng chỉ có ý nghĩa khi luồng cơ bản đã ổn định. Những phần gọi dịch vụ trực tuyến cần được xác nhận lại trong môi trường triển khai thật.")
 
-    h1("7. Hạn chế và kế hoạch tiếp theo")
-    bullet("Benchmark hiện tập trung 5 PDF SynthDocQA; cần thêm bộ production cân bằng theo loại dữ liệu.")
-    bullet("Visual-element index và OCR vùng annotation chưa bật cho mọi tài liệu production.")
-    bullet("Reranker hiện deterministic; chưa có cross-encoder học từ phản hồi người dùng.")
-    bullet("Cần re-ingest, chạy benchmark regression và theo dõi độ trễ, fallback OCR, no-evidence rate theo loại dữ liệu.")
-    body("Chi tiết phương pháp, failure analysis, bảng kết quả đầy đủ và quy trình tái lập nằm trong docs/report.md. File này là bản tóm tắt để reviewer đọc nhanh; không thay thế hồ sơ nghiên cứu chi tiết.")
+    h1("13. Hạn chế và kế hoạch tiếp theo")
+    bullet("Bộ đánh giá hiện tập trung 5 PDF SynthDocQA; cần thêm bộ tài liệu thực tế cân bằng theo loại dữ liệu.")
+    bullet("Chỉ mục phần tử hình và OCR vùng chú thích chưa bật cho mọi tài liệu vận hành.")
+    bullet("Bộ xếp hạng hiện dựa trên luật; chưa có mô hình xếp hạng học từ phản hồi người dùng.")
+    bullet("Cần nạp lại tài liệu, chạy đánh giá hồi quy và theo dõi độ trễ, tỷ lệ OCR dự phòng, tỷ lệ không có bằng chứng theo loại dữ liệu.")
+    body("Chi tiết phương pháp, phân tích lỗi, bảng kết quả đầy đủ và quy trình tái lập nằm trong docs/report.md. File PDF này là bản trình bày có dẫn chứng; hồ sơ nghiên cứu là nơi lưu giải thích đầy đủ.")
 
     document.multiBuild(story)
     print(f"Wrote {OUTPUT} ({OUTPUT.stat().st_size} bytes)")
