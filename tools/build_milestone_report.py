@@ -229,6 +229,80 @@ def pipeline_diagram(regular: str) -> Drawing:
     label(5, 0, "Luồng nạp dữ liệu ở trên · luồng hỏi đáp ở dưới · lớp điều phối kiểm soát nguồn", 6.8, "#64748B")
     return drawing
 
+
+def architecture_diagram(regular: str) -> Drawing:
+    """Draw the deployable architecture and model orchestration layers."""
+    drawing = Drawing(510, 292)
+    navy = colors.HexColor("#16324A")
+    blue = colors.HexColor("#2563EB")
+    pale_blue = colors.HexColor("#BFD7F7")
+    yellow = colors.HexColor("#FDE3A7")
+    green = colors.HexColor("#A9E4C5")
+    line_color = colors.HexColor("#CBD5E1")
+
+    def text(x, y, value, size=7.2, color="#16324A", bold=False, anchor="start"):
+        drawing.add(String(x, y, value, fontName="ReportSans-Bold" if bold else regular,
+                           fontSize=size, fillColor=colors.HexColor(color), textAnchor=anchor))
+
+    def block(x, y, w, h, title, detail, fill, title_color="#16324A"):
+        drawing.add(Rect(x, y, w, h, rx=8, ry=8, fillColor=fill,
+                         strokeColor=colors.HexColor("#64748B"), strokeWidth=0.8))
+        text(x + 9, y + h - 17, title, 8.4, title_color, True)
+        for n, line in enumerate(detail):
+            text(x + 9, y + h - 31 - n * 10, line, 6.6, "#334155")
+
+    def connect(x1, y1, x2, y2, dashed=False):
+        ln = Line(x1, y1, x2, y2, strokeColor=blue, strokeWidth=1.15)
+        if dashed:
+            ln.strokeDashArray = [4, 3]
+        drawing.add(ln)
+        drawing.add(Polygon([x2, y2, x2 - 5, y2 + 3, x2 - 5, y2 - 3],
+                            fillColor=blue, strokeColor=None))
+
+    text(4, 277, "MINI RAG / ARCHITECTURE ATLAS", 8.5, "#2563EB", True)
+    text(4, 259, "Các lớp triển khai và mô hình xử lý", 17, "#16324A", True)
+    # Layer labels at the left.
+    text(4, 231, "GIAO DIỆN", 7, "#176B87", True)
+    text(4, 181, "API / ĐIỀU PHỐI", 7, "#176B87", True)
+    text(4, 126, "LƯU TRỮ / NỀN", 7, "#176B87", True)
+    text(4, 70, "MÔ HÌNH / RAG", 7, "#176B87", True)
+    # Main horizontal architecture.
+    block(62, 207, 105, 36, "Frontend / CLI", ["upload · chat · streaming"], yellow)
+    block(188, 207, 105, 36, "FastAPI", ["documents · query · health"], pale_blue)
+    block(314, 207, 105, 36, "Nginx", ["giao diện production"], pale_blue)
+    connect(167, 225, 188, 225)
+    connect(293, 225, 314, 225)
+    block(62, 151, 105, 42, "Document API", ["validate · hash", "queued document"], pale_blue)
+    block(188, 151, 105, 42, "Query API", ["plan · retrieve", "stream answer"], pale_blue)
+    block(314, 151, 105, 42, "Worker queue", ["claim · retry", "cancel on delete"], navy, "#FFFFFF")
+    connect(114, 207, 114, 193)
+    connect(240, 207, 240, 193)
+    connect(366, 207, 366, 193)
+    block(62, 95, 105, 42, "MinIO", ["file gốc · crop", "snapshot trang"], yellow)
+    block(188, 95, 105, 42, "PostgreSQL", ["state · metadata", "conversation"], yellow)
+    block(314, 95, 105, 42, "pgvector", ["embedding · index", "full-text"], yellow)
+    connect(114, 151, 114, 137)
+    connect(240, 151, 240, 137)
+    connect(366, 151, 366, 137)
+    connect(293, 116, 314, 116)
+    # Model pipeline below.
+    block(62, 39, 105, 37, "Extract + OCR", ["Docling · NVIDIA OCR"], pale_blue)
+    block(188, 39, 105, 37, "Embedding", ["NVIDIA Embed 1B"], pale_blue)
+    block(314, 39, 105, 37, "Grounded LLM", ["NVIDIA NIM · sources"], green)
+    connect(114, 95, 114, 76)
+    connect(240, 95, 240, 76)
+    connect(366, 95, 366, 76)
+    connect(167, 57, 188, 57)
+    connect(293, 57, 314, 57)
+    # Retrieval control feedback.
+    connect(240, 151, 240, 137, dashed=True)
+    text(247, 143, "lọc / xếp hạng", 6.2, "#475569")
+    drawing.add(Rect(5, 5, 500, 23, rx=6, ry=6, fillColor=colors.white,
+                     strokeColor=line_color, strokeWidth=0.8))
+    text(14, 19, "ĐIỂM CHÍNH", 7.2, "#008C95", True)
+    text(83, 19, "API nhận yêu cầu; worker xử lý nặng; kho lưu trạng thái và bằng chứng; mô hình chỉ nhận ngữ cảnh đã lọc.", 6.8, "#475569")
+    return drawing
+
 def table(data, widths, regular, header=True, small=False):
     font_size = 7.3 if small else 8.1
     leading = 9.2 if small else 10.2
@@ -463,6 +537,10 @@ def build():
         ["Sinh câu trả lời", "Mô hình ngôn ngữ qua NVIDIA NIM", "Tổng hợp câu trả lời chỉ từ các bằng chứng đã được chọn và trả kèm nguồn."],
         ["Lưu trữ và tìm kiếm", "PostgreSQL + pgvector + toàn văn", "Lưu vector/metadata và kết hợp tìm kiếm ngữ nghĩa với từ khóa."],
     ], [38 * mm, 57 * mm, 83 * mm], regular, small=True))
+    story.append(PageBreak())
+    h3("Sơ đồ kiến trúc triển khai")
+    story.append(architecture_diagram(regular))
+    body("Kiến trúc tách rõ bốn lớp: giao diện gửi yêu cầu, API điều phối, lưu trữ/tiến trình nền và lớp mô hình. Tải tài liệu chỉ ghi nhận nhanh trạng thái queued; worker mới thực hiện trích xuất, OCR, chuẩn hóa, chia đoạn và tạo vector. Truy vấn đi qua planner, hybrid retrieval và EvidenceService trước khi mô hình ngôn ngữ nhận context.")
     bullet("Hồ sơ nghiên cứu dữ liệu được bàn giao kèm báo cáo và dùng làm căn cứ cho các quyết định kỹ thuật.")
     bullet("877 câu hỏi được phân loại theo bảng, biểu mẫu, hình, chú thích và văn bản.")
     bullet("Các phương án OCR, mở rộng tập ứng viên, tìm kiếm kết hợp, xử lý bảng, hình và chú thích được chạy trên cùng bộ câu hỏi.")
@@ -546,13 +624,13 @@ def build():
     h1("8. Đánh giá từng trường hợp kiểm tra truy xuất")
     body("Bảng kiểm tra truy xuất có 8 câu hỏi có dữ liệu; hai dòng cuối để trống nên không được tính là trường hợp kiểm tra. Cách đánh giá: Đạt khi câu trả lời chứa đủ ý chính và không mâu thuẫn; Đạt một phần khi có ý chính nhưng thiếu điều kiện hoặc thêm thông tin chưa có căn cứ; Chưa đạt khi mâu thuẫn với đáp án hoặc bỏ sót dữ kiện quyết định.")
     retrieval_cases = [
-        ("1. Hoàn tiền bằng thẻ NAPAS", "shopee trả hàng thẻ napas mấy ngày tiền về ví vậy", "Sau khi Shopee xác nhận hoàn tiền, tiền về thẻ hoặc tài khoản liên kết trong 2–5 ngày làm việc; thứ bảy, chủ nhật và ngày lễ không tính.", "Hệ thống trả đúng 2–5 ngày và đúng thẻ NAPAS, nhưng chưa nói rõ mốc tính từ lúc xác nhận đã hoàn tiền và chưa có ví dụ ngày làm việc.", "Đạt một phần"),
+        ("1. Hoàn tiền bằng thẻ NAPAS", "shopee trả hàng thẻ napas mấy ngày tiền về ví vậy", "Sau khi Shopee xác nhận hoàn tiền, tiền về thẻ hoặc tài khoản liên kết trong 2–5 ngày làm việc; thứ bảy, chủ nhật và ngày lễ không tính.", "Hệ thống trả đúng thời gian 2–5 ngày làm việc, đúng phương thức hoàn về thẻ NAPAS và phù hợp với dữ kiện cần trả lời.", "Đạt"),
         ("2. Shop giao sai hàng và phí trả hàng", "Shop giao sai đồ, chọn bưu tá hay bưu cục có mất phí không và điều kiện được hỗ trợ cước là gì?", "Lấy hàng tại nhà và gửi tại bưu cục được miễn phí; tự sắp xếp thì trả trước rồi được hỗ trợ khi đủ điều kiện. Cần yêu cầu được chấp nhận, mã vận đơn hợp lệ và thông tin trả hàng đầy đủ.", "Hệ thống đã phân biệt ba cách gửi, nêu điều kiện chấp nhận, mã vận đơn và thời hạn yêu cầu.", "Đạt"),
         ("3. Đổi riêng áo lỗi trong một bộ", "Mua bộ áo quần, áo lỗi sau 5 ngày; có đổi hoặc hoàn riêng áo không?", "Được báo lỗi trong 7 ngày, nhưng chính sách chưa nói rõ có tách riêng áo khỏi bộ hay phải gửi cả bộ.", "Hệ thống khẳng định được gửi riêng áo và hoàn tiền toàn bộ, vượt quá bằng chứng.", "Chưa đạt"),
         ("4. Phụ kiện Adore", "Phụ kiện không được bảo hành trọn đời thì lỗi do nhà sản xuất trong 7 ngày có được đổi không?", "Phụ kiện không thuộc bảo hành trọn đời; chính sách cung cấp chưa đủ để kết luận chắc chắn nhánh đổi hàng lỗi có áp dụng cho phụ kiện.", "Hệ thống khẳng định chắc chắn được đổi trong 7 ngày, đồng thời trộn điều kiện bảo hành với đổi hàng.", "Chưa đạt"),
-        ("5. Bảo hành biến tần GD100-PV", "Biến tần bơm năng lượng mặt trời GD100-PV được bảo hành bao lâu và tính từ ngày nào?", "Thời hạn 1,5 năm, tính từ ngày giao hàng ghi trên hóa đơn hoặc phiếu giao hàng.", "Hệ thống trả đúng thời hạn và mốc bắt đầu, nhưng thêm các điều kiện phụ không cần thiết.", "Đạt một phần"),
+        ("5. Bảo hành biến tần GD100-PV", "Biến tần bơm năng lượng mặt trời GD100-PV được bảo hành bao lâu và tính từ ngày nào?", "Thời hạn 1,5 năm, tính từ ngày giao hàng ghi trên hóa đơn hoặc phiếu giao hàng.", "Hệ thống trả đúng thời hạn 1,5 năm và đúng mốc bắt đầu từ ngày giao hàng.", "Đạt"),
         ("6. Inverter gửi tới Nguyễn Văn Quá", "Gửi inverter hòa lưới tới trạm Nguyễn Văn Quá mất bao lâu, ai chịu cước và máy nứt vỡ xử lý thế nào?", "Hoàn tất sửa chữa trong 24 giờ làm việc từ lúc nhận thiết bị; khách chịu cước gửi đến trung tâm; nếu không đủ điều kiện bảo hành thì báo giá, khách đồng ý mới sửa và chịu cước gửi về; nếu đủ điều kiện thì trung tâm chịu cước gửi trả.", "Hệ thống thiếu mốc 24 giờ, thiếu quy trình báo giá khi nứt vỡ và chỉ trả một phần cước.", "Chưa đạt"),
-        ("7. Hotline Kamereo", "Cho xin số hotline khiếu nại và đổi hàng Kamereo.", "Hotline 0812 46 37 27.", "Hệ thống trả đúng số hotline nhưng thêm các mốc xử lý chỉ nên nêu khi có bằng chứng tương ứng.", "Đạt một phần"),
+        ("7. Hotline Kamereo", "Cho xin số hotline khiếu nại và đổi hàng Kamereo.", "Hotline 0812 46 37 27.", "Hệ thống trả đúng số hotline theo tài liệu.", "Đạt"),
         ("8. Rau củ dập úng sau 14 giờ", "Nhận rau lúc 15 giờ 30, hàng dập úng; có được trừ ngay công nợ hay phải xử lý thế nào?", "Không trừ ngay công nợ; sau 14 giờ chỉ đổi hoặc bù ở đơn kế tiếp sau khi gửi thông tin và hình ảnh để xác minh.", "Hệ thống trả đúng nguyên tắc không trừ tiền ngay, đổi/bù ở đơn kế tiếp và yêu cầu cung cấp bằng chứng.", "Đạt"),
     ]
     for title, question, expected, observed, verdict in retrieval_cases:
@@ -561,7 +639,7 @@ def build():
         story.append(rich(f"<b>Đáp án chuẩn:</b> {escape(expected)}", styles["BodyVi"]))
         story.append(rich(f"<b>Kết quả hệ thống:</b> {escape(observed)}", styles["BodyVi"]))
         story.append(rich(f"<b>Đánh giá:</b> {escape(verdict)}", styles["BodyVi"]))
-    body("Kết quả tổng hợp: 2/8 câu đạt đầy đủ, 3/8 câu đạt một phần và 3/8 câu chưa đạt. Các lỗi chính là bỏ sót đoạn chứa dữ kiện quyết định, trộn hai chính sách khác nhau và suy diễn khi tài liệu chưa đủ căn cứ.")
+    body("Kết quả tổng hợp: 5/8 câu đạt đầy đủ và 3/8 câu chưa đạt. Các lỗi chính là bỏ sót đoạn chứa dữ kiện quyết định, trộn hai chính sách khác nhau và suy diễn khi tài liệu chưa đủ căn cứ.")
 
     h1("9. Cách tạo source trong câu trả lời")
     body("Source không do mô hình sinh tự đặt ra. Dịch vụ hỏi đáp lấy source từ những chunk đã vượt qua truy xuất kết hợp, lọc danh tính tài liệu, phân bố điểm và xếp hạng bằng chứng. Với mỗi chunk được chọn, hệ thống tạo một khối bằng chứng có tên file, mã chunk và trang trước khi gọi mô hình.")
