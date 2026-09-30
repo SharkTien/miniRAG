@@ -136,7 +136,7 @@ def evidence_image(path: Path, caption: str, regular: str, width: float = 166 * 
 
 def pipeline_diagram(regular: str) -> Drawing:
     """Draw the detailed ingestion and retrieval architecture used in the report."""
-    drawing = Drawing(510, 310)
+    drawing = Drawing(510, 320)
     palette = {
         "data": colors.HexColor("#FDE3A7"),
         "process": colors.HexColor("#BFD7F7"),
@@ -217,16 +217,16 @@ def pipeline_diagram(regular: str) -> Drawing:
     arrow(350, 84, 332, 151, dashed=True)
 
     # Explanatory panel.
-    drawing.add(Rect(5, 5, 500, 60, rx=7, ry=7, fillColor=colors.white,
+    drawing.add(Rect(5, 10, 500, 60, rx=7, ry=7, fillColor=colors.white,
                      strokeColor=palette["line"], strokeWidth=0.8))
-    label(14, 49, "ĐIỂM CHÍNH", 7.4, "#008C95", True)
-    label(14, 36, "Tài liệu trở thành bằng chứng có nguồn trước khi mô hình trả lời.", 7.8)
-    label(14, 23, "Ví dụ: câu hỏi về NAPAS phải giữ được đoạn 2–5 ngày và mốc tính tiền.", 7.4, "#475569")
-    label(326, 49, "CÁCH ĐỌC", 7.4, "#2563EB", True)
-    label(326, 36, "Nét liền = luồng chính · nét đứt = phản hồi", 7.0, "#475569")
-    label(326, 23, "Kho bằng chứng dùng chung cho truy xuất và trích nguồn.", 7.0, "#475569")
-    drawing.add(Line(5, 73, 505, 73, strokeColor=palette["line"], strokeWidth=0.6))
-    label(5, 0, "Luồng nạp dữ liệu ở trên · luồng hỏi đáp ở dưới · lớp điều phối kiểm soát nguồn", 6.8, "#64748B")
+    label(14, 54, "ĐIỂM CHÍNH", 7.4, "#008C95", True)
+    label(14, 41, "Tài liệu trở thành bằng chứng có nguồn trước khi mô hình trả lời.", 7.8)
+    label(14, 28, "Ví dụ: câu hỏi về NAPAS phải giữ được đoạn 2–5 ngày và mốc tính tiền.", 7.4, "#475569")
+    label(326, 54, "CÁCH ĐỌC", 7.4, "#2563EB", True)
+    label(326, 41, "Nét liền = luồng chính · nét đứt = phản hồi", 7.0, "#475569")
+    label(326, 28, "Kho bằng chứng dùng chung cho truy xuất và trích nguồn.", 7.0, "#475569")
+    drawing.add(Line(5, 78, 505, 78, strokeColor=palette["line"], strokeWidth=0.6))
+    label(5, 4, "Luồng nạp dữ liệu ở trên · luồng hỏi đáp ở dưới · lớp điều phối kiểm soát nguồn", 6.8, "#64748B")
     return drawing
 
 
@@ -256,7 +256,11 @@ def architecture_diagram(regular: str) -> Drawing:
         if dashed:
             ln.strokeDashArray = [4, 3]
         drawing.add(ln)
-        drawing.add(Polygon([x2, y2, x2 - 5, y2 + 3, x2 - 5, y2 - 3],
+        import math
+        angle = math.atan2(y2 - y1, x2 - x1)
+        left = (x2 - 5 * math.cos(angle - 0.45), y2 - 5 * math.sin(angle - 0.45))
+        right = (x2 - 5 * math.cos(angle + 0.45), y2 - 5 * math.sin(angle + 0.45))
+        drawing.add(Polygon([x2, y2, left[0], left[1], right[0], right[1]],
                             fillColor=blue, strokeColor=None))
 
     text(4, 277, "MINI RAG / ARCHITECTURE ATLAS", 8.5, "#2563EB", True)
