@@ -3,6 +3,8 @@
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import openpyxl
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -628,23 +630,50 @@ def build():
 
     h1("8. Đánh giá từng trường hợp kiểm tra truy xuất")
     body("Bảng kiểm tra truy xuất có 8 câu hỏi có dữ liệu; hai dòng cuối để trống nên không được tính là trường hợp kiểm tra. Cách đánh giá: Đạt khi câu trả lời chứa đủ ý chính và không mâu thuẫn; Đạt một phần khi có ý chính nhưng thiếu điều kiện hoặc thêm thông tin chưa có căn cứ; Chưa đạt khi mâu thuẫn với đáp án hoặc bỏ sót dữ kiện quyết định.")
-    retrieval_cases = [
-        ("1. Hoàn tiền bằng thẻ NAPAS", "shopee trả hàng thẻ napas mấy ngày tiền về ví vậy", "Shopee — hướng dẫn đổi trả và hoàn tiền", "Shopee — hướng dẫn đổi trả và hoàn tiền", "Sau khi Shopee xác nhận hoàn tiền, tiền về thẻ hoặc tài khoản liên kết với thẻ NAPAS trong 2–5 ngày làm việc; thứ bảy, chủ nhật và ngày lễ không tính.", "Tiền hoàn trả khi đổi trả bằng thẻ nội địa NAPAS được chuyển về tài khoản NAPAS trong khoảng 2–5 ngày làm việc, tùy ngân hàng.", "Khớp", "Đạt"),
-        ("2. Shop giao sai hàng và phí trả hàng", "Shop giao sai đồ, chọn bưu tá hay bưu cục có mất phí không và điều kiện được hỗ trợ cước là gì?", "Shopee — hướng dẫn đổi trả và hoàn tiền", "Shopee — hướng dẫn đổi trả và hoàn tiền", "Lấy hàng tại nhà và gửi tại bưu cục được miễn phí; tự sắp xếp thì trả trước rồi được hỗ trợ khi đủ điều kiện. Yêu cầu phải được chấp nhận và có đủ thông tin trả hàng, mã vận đơn.", "Shopee miễn phí trả hàng khi yêu cầu được chấp nhận, thông tin trả hàng và mã vận đơn đầy đủ, mã vận đơn giao thành công, người bán hoặc Shopee đồng ý hoàn tiền và đơn không do người bán tự vận chuyển. Hệ thống phân biệt lấy tại nhà và gửi tại bưu cục; cả hai miễn phí, còn tự sắp xếp thì người mua trả trước rồi mới được hỗ trợ.", "Khớp", "Đạt"),
-        ("3. Đổi riêng áo lỗi trong một bộ", "Mua bộ áo quần, áo lỗi sau 5 ngày; có đổi hoặc hoàn riêng áo không?", "Adore — chính sách đổi hàng", "Adore — chính sách đổi hàng", "Được báo lỗi trong 7 ngày. Tuy nhiên, chính sách chưa nói rõ có tách riêng áo khỏi bộ hay phải gửi cả bộ; không được tự kết luận phần tiền hoàn riêng.", "Hệ thống khẳng định có thể chỉ gửi áo lỗi, quần không cần gửi lại, và nếu không có mẫu thay thế thì hoàn toàn bộ hóa đơn; đồng thời nêu địa chỉ gửi và chi phí vận chuyển.", "Khớp", "Chưa đạt"),
-        ("4. Phụ kiện Adore", "Phụ kiện không được bảo hành trọn đời thì lỗi do nhà sản xuất trong 7 ngày có được đổi không?", "Adore — chính sách đổi hàng", "Adore — chính sách đổi hàng", "Phụ kiện không thuộc bảo hành trọn đời; chính sách cung cấp chưa đủ để kết luận chắc chắn nhánh đổi hàng lỗi có áp dụng cho phụ kiện.", "Hệ thống trả rằng phụ kiện không được bảo hành trọn đời nhưng vẫn được đổi trong 7 ngày nếu lỗi do nhà sản xuất, kèm điều kiện còn nguyên vẹn, có tem và hóa đơn.", "Khớp", "Chưa đạt"),
-        ("5. Bảo hành biến tần GD100-PV", "Biến tần bơm năng lượng mặt trời GD100-PV được bảo hành bao lâu và tính từ ngày nào?", "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời", "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời", "Thời hạn 1,5 năm, tính từ ngày giao hàng ghi trên hóa đơn hoặc phiếu giao hàng.", "Hệ thống kết luận đúng sản phẩm được bảo hành 1,5 năm, tính từ ngày giao hàng trên hóa đơn hoặc phiếu giao hàng; sau đó thêm các dòng điều kiện và địa điểm không cần thiết.", "Khớp", "Đạt"),
-        ("6. Inverter gửi tới Nguyễn Văn Quá", "Gửi inverter hòa lưới tới trạm Nguyễn Văn Quá mất bao lâu, ai chịu cước và máy nứt vỡ xử lý thế nào?", "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời", "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời", "Hoàn tất sửa chữa trong 24 giờ làm việc từ lúc nhận thiết bị; khách chịu cước gửi đến trung tâm; nếu không đủ điều kiện bảo hành thì báo giá, khách đồng ý mới sửa và chịu cước gửi về; nếu đủ điều kiện thì trung tâm chịu cước gửi trả.", "Hệ thống nói chính sách không ghi rõ số ngày, khách chịu cước gửi đến trung tâm và trung tâm chịu cước gửi trả khi đủ điều kiện; không nêu quy trình báo giá khi máy nứt vỡ.", "Khớp", "Chưa đạt"),
-        ("7. Hotline Kamereo", "Cho xin số hotline khiếu nại và đổi hàng Kamereo.", "Kamereo — chính sách đổi trả hàng hóa", "Kamereo — chính sách đổi trả hàng hóa", "Hotline 0812 46 37 27.", "Kamereo có đường dây nóng 0812 46 37 27. Hệ thống còn nêu các kênh liên hệ khác và thời gian xác nhận, kiểm tra yêu cầu.", "Khớp", "Đạt"),
-        ("8. Rau củ dập úng sau 14 giờ", "Nhận rau lúc 15 giờ 30, hàng dập úng; có được trừ ngay công nợ hay phải xử lý thế nào?", "Kamereo — chính sách đổi trả hàng hóa", "Kamereo — chính sách đổi trả hàng hóa", "Không trừ ngay công nợ; sau 14 giờ chỉ đổi hoặc bù ở đơn kế tiếp sau khi gửi thông tin và hình ảnh để xác minh.", "Bạn không thể trừ tiền ngay. Vì giao sau 14 giờ tại Hà Nội, Kamereo chỉ hỗ trợ đổi hoặc bù ở đơn tiếp theo; hệ thống cũng nêu yêu cầu gửi mã đơn, thông tin hàng, mô tả tình trạng và hình ảnh.", "Khớp", "Đạt"),
-    ]
-    for title, question, expected_source, retrieved_source, expected, observed, source_match, verdict in retrieval_cases:
-        story.append(Paragraph(escape(title), styles["ReportH2"]))
-        story.append(rich(f"<b>Câu hỏi:</b> {escape(question)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Nguồn mong đợi:</b> {escape(expected_source)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Nguồn hệ thống:</b> {escape(retrieved_source)} — <b>{escape(source_match)}</b>", styles["BodyVi"]))
-        story.append(rich(f"<b>Đáp án mong đợi:</b> {escape(expected)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Câu trả lời hệ thống:</b> {escape(observed)}", styles["BodyVi"]))
+    # Đọc nguyên văn bộ kiểm tra để không làm mất câu hỏi hoặc chi tiết câu trả lời.
+    workbook = openpyxl.load_workbook(ROOT / "output/retrieval_verification.xlsx", data_only=True)
+    sheet = workbook.active
+    source_labels = {
+        "shopee": "Shopee — hướng dẫn đổi trả và hoàn tiền",
+        "adore": "Adore — chính sách đổi hàng",
+        "gd100": "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời",
+        "inverter": "DAT Group — chính sách bảo hành sản phẩm năng lượng mặt trời",
+        "kamereo": "Kamereo — chính sách đổi trả hàng hóa",
+    }
+    verdicts = ["Đạt", "Đạt", "Chưa đạt", "Chưa đạt", "Đạt", "Chưa đạt", "Đạt", "Đạt"]
+
+    def readable_source(source):
+        folded = str(source or "").lower()
+        for key, label in source_labels.items():
+            if key in folded:
+                return label
+        return "Nguồn trong bộ kiểm tra"
+
+    def exact(value):
+        return escape(str(value or "")).replace("\n", "<br/>")
+
+    retrieval_cases = []
+    for row in list(sheet.iter_rows(min_row=2, values_only=True)):
+        question, expected_source, retrieved_source, expected_answer, retrieved_answer = row[:5]
+        if not question:
+            continue
+        retrieval_cases.append((
+            str(question),
+            readable_source(expected_source),
+            readable_source(retrieved_source),
+            str(expected_answer or ""),
+            str(retrieved_answer or ""),
+        ))
+
+    for index, (question, expected_source, retrieved_source, expected, observed) in enumerate(retrieval_cases):
+        verdict = verdicts[index] if index < len(verdicts) else "Chưa phân loại"
+        source_match = "Khớp" if expected_source == retrieved_source else "Không khớp"
+        story.append(Paragraph(escape(f"{index + 1}. Trường hợp kiểm tra"), styles["ReportH2"]))
+        story.append(rich(f"<b>Câu hỏi nguyên văn:</b><br/>{exact(question)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Nguồn mong đợi:</b> {exact(expected_source)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Nguồn hệ thống:</b> {exact(retrieved_source)} — <b>{source_match}</b>", styles["BodyVi"]))
+        story.append(rich(f"<b>Đáp án mong đợi nguyên văn:</b><br/>{exact(expected)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Câu trả lời hệ thống nguyên văn:</b><br/>{exact(observed)}", styles["BodyVi"]))
         story.append(rich(f"<b>Đánh giá:</b> {escape(verdict)}", styles["BodyVi"]))
     body("Kết quả tổng hợp: 5/8 câu đạt đầy đủ và 3/8 câu chưa đạt. Cả 8 trường hợp đều truy xuất đúng tài liệu mong đợi; ba lỗi còn lại nằm ở mức độ đầy đủ và tính kỷ luật của câu trả lời, không phải chọn sai tài liệu.")
 
