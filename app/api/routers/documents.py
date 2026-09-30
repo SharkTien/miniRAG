@@ -5,7 +5,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
 from app.api.dependencies import get_system_actor, get_document_service, get_document_repo, get_storage
@@ -14,6 +15,11 @@ from app.repositories.document_repo import DocumentRepository
 from app.config.storage import StorageManager
 
 router = APIRouter(tags=["documents"])
+
+
+class RenameDocumentRequest(BaseModel):
+    """Payload for changing a document's display name."""
+    display_name: str = Field(..., min_length=1, max_length=512)
 
 @router.get("")
 def get_docs(
@@ -27,27 +33,58 @@ def get_docs(
 @router.post("")
 def upload_docs(
     files: list[UploadFile] = File(...), 
+    display_names: list[str] | None = Form(None),
+    display_name: str | None = Form(None),
     actor: str = Depends(get_system_actor),
     doc_service: DocumentService = Depends(get_document_service)
 ):
     """Upload docs."""
     docs = []
-    for file in files:
-        doc_id = doc_service.process_upload(file, actor)
+    for index, file in enumerate(files):
+        requested_name = (
+            display_names[index] if display_names and index < len(display_names)
+            else (display_name if index == 0 else None)
+        )
+        doc_id = doc_service.process_upload(file, actor, requested_name)
         doc_service.repo.update_document_status(doc_id, "queued")
         # Processing is asynchronous.  The worker performs extraction,
         # chunking and embedding after the upload has been acknowledged, so
         # ``total_chunks`` is initially zero and is updated in document data.
         docs.append({
             "document_id": str(doc_id),
-            "file_name": file.filename,
+            "file_name": requested_name.strip() if requested_name and requested_name.strip() else file.filename,
+            "original_filename": file.filename,
             "status": "queued",
             "total_chunks": 0,
             # Keep legacy response keys for existing clients.
             "id": str(doc_id),
-            "filename": file.filename,
+            "filename": requested_name.strip() if requested_name and requested_name.strip() else file.filename,
         })
     return {"message": "Tải lên thành công", "documents": docs, "uploaded": docs}
+
+
+@router.patch("/{document_id}")
+def rename_document_api(
+    document_id: uuid.UUID,
+    payload: RenameDocumentRequest,
+    actor: str = Depends(get_system_actor),
+    repo: DocumentRepository = Depends(get_document_repo),
+):
+    """Rename an indexed document without changing its stored file."""
+    display_name = " ".join(payload.display_name.replace("\x00", "").split()).strip()
+    if not display_name:
+        raise HTTPException(400, "Tên tài liệu không được để trống")
+    row = repo.get_document(document_id, actor)
+    if not row:
+        raise HTTPException(404, "Tài liệu không tồn tại hoặc không có quyền")
+    if not repo.rename_document(document_id, display_name, actor):
+        raise HTTPException(404, "Tài liệu không tồn tại hoặc không có quyền")
+    return {
+        "document_id": str(document_id),
+        "display_name": display_name,
+        "original_filename": row[1],
+        "status": row[7],
+    }
 
 @router.delete("/{document_id}")
 def delete_document_api(

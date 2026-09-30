@@ -55,6 +55,4 @@ Các tham số vận hành được cấu hình qua environment: `DATABASE_URL`,
 
 ## Giới hạn và hướng cải thiện
 
-Chất lượng phụ thuộc embedding/LLM endpoint, OCR và dữ liệu benchmark. Reranker
-hiện rule-based; có thể thay bằng cross-encoder. Cần bổ sung feedback loop,
-human review cho high-impact answers và regression set lớn hơn trước production.
+Chất lương OCR hiện đã tối ưu nhất có thể và có thể cải thiện thêm để tiếp tục benchmark. Cần tiếp tục cải thiện thêm nhiều về các phase của RAG để đạt chuẩn kỹ thuật như chunking, enrichment, embeddings, llm eval, preparation và propmpt. 

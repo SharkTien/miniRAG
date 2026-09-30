@@ -1,14 +1,14 @@
 """Provider router for OCR correction and semantic normalization.
 
-Policy ``auto`` intentionally prefers the already-running local Qwen endpoint.
-The hosted NVIDIA endpoint is a failover, not a hard dependency.
+The default policy uses NVIDIA NIM. The local Qwen adapter remains available
+only for explicit backwards-compatible deployments.
 """
 
 from __future__ import annotations
 
 import time
 
-from app.config.settings import NGC_API_KEY, NIM_MODEL, SEMANTIC_NORMALIZER
+from app.config.settings import NIM_MODEL, SEMANTIC_NORMALIZER
 
 
 def _providers(policy: str) -> list[str]:
@@ -20,7 +20,9 @@ def _providers(policy: str) -> list[str]:
     if policy in {"nim", "nvidia", "nvidia_nim"}:
         return ["nvidia_nim"]
     if policy == "auto":
-        return ["local_qwen", "nvidia_nim"] if NGC_API_KEY else ["local_qwen"]
+        # Auto must not silently switch providers: OCR and normalization are
+        # benchmarked against NVIDIA, so local Qwen is opt-in only.
+        return ["nvidia_nim"]
     raise ValueError(
         "SEMANTIC_NORMALIZER must be one of auto, local, nvidia, or none"
     )

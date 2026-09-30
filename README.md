@@ -44,6 +44,66 @@ production được chạy riêng trong service Nginx.
 - React/Vite và Nginx cho giao diện production.
 - GitHub Actions cho lint, test, build và smoke test.
 
+### Mô hình mặc định
+
+| Thành phần | Mô hình hoặc công cụ | Vai trò |
+|---|---|---|
+| Embedding | `nvidia/nemotron-3-embed-1b` (2048 chiều) | Biến câu hỏi và từng đoạn văn thành véc-tơ để tìm kiếm ngữ nghĩa. |
+| Mô hình trả lời và chuẩn hóa | `meta/llama-3.2-11b-vision-instruct` qua NVIDIA NIM | Tạo câu trả lời tiếng Việt và chuẩn hóa đoạn OCR có độ tin cậy thấp từ các bằng chứng đã chọn. |
+| OCR tài liệu | `nvidia/nemotron-ocr-v2` qua NVIDIA NeMo Retriever OCR | Đọc PDF scan, JPG và PNG, đồng thời trả tọa độ vùng chữ và độ tin cậy. |
+| Phân tích bố cục | Docling; RAGFlow DeepDoc là chế độ tùy chọn | Giữ trang, mục, bảng, hình và vị trí của đoạn trích. |
+
+Các mô hình trên chỉ là giá trị mặc định. Có thể thay đổi bằng các biến
+`EMBEDDING_MODEL`, `LLM_MODEL` (hoặc `NIM_MODEL`), `NVIDIA_OCR_MODEL` và các
+biến định tuyến OCR trong `.env`, không cần sửa mã nghiệp vụ.
+
+Khi dùng endpoint NVIDIA hosted, tài khoản nhà phát triển được dùng các
+endpoint miễn phí cho mục đích thử nghiệm. NVIDIA áp dụng giới hạn theo từng
+mô hình và tải hệ thống, không có một số token miễn phí cố định dùng chung cho
+tất cả mô hình. Dùng self-hosted NIM trên hạ tầng NVIDIA nếu cần kiểm soát chi
+phí và lưu lượng ổn định hơn.
+
+### Phương pháp được dùng trong RAG
+
+Pipeline đầy đủ của hệ thống là:
+
+```text
+tài liệu
+  → trích xuất văn bản/bố cục (Docling hoặc NVIDIA NeMo Retriever OCR v2)
+  → làm sạch và chuẩn hóa có kiểm tra nguồn
+  → chia đoạn theo cấu trúc và ngữ nghĩa
+  → embedding nvidia/nemotron-3-embed-1b
+  → PostgreSQL + pgvector
+  → truy hồi kết hợp véc-tơ và từ khóa
+  → lọc theo phân bố điểm + xếp hạng bằng chứng
+  → LLM tạo câu trả lời có nguồn
+```
+
+Các bước truy hồi và kiểm soát bằng chứng:
+
+1. **Lập kế hoạch câu hỏi:** chuẩn hóa cách viết tiếng Việt, tạo biến thể tìm
+   kiếm và nhận diện câu hỏi cần khớp chính xác, câu hỏi so sánh hoặc câu hỏi
+   tổng hợp.
+2. **Truy hồi kết hợp:** tìm kiếm gần đúng bằng cosine similarity trên
+   `pgvector`, tìm kiếm toàn văn PostgreSQL và chấm lại ứng viên bằng BM25.
+   Hai tín hiệu được hợp nhất bằng thứ hạng tương hỗ (RRF), sau đó tính điểm
+   kết hợp với trọng số 0,65 cho ngữ nghĩa và 0,35 cho BM25.
+3. **Khớp chính xác:** câu hỏi có cụm từ hoặc giá trị cụ thể được tìm bằng
+   cụm từ nguyên văn trước khi mở rộng sang tìm kiếm ngữ nghĩa.
+4. **Lọc theo phân bố điểm:** lấy nhiều ứng viên hơn số kết quả cuối cùng,
+   loại các đoạn có điểm thấp so với trung vị và độ phân tán của nhóm kết quả,
+   rồi loại nội dung trùng lặp.
+5. **Đánh giá bằng chứng:** xếp hạng lại theo độ phủ từ khóa, độ khớp cụm từ
+   và điểm ngữ nghĩa; kiểm tra mức liên quan, độ bao phủ, tính nhất quán và
+   khả năng trả lời. Khi thiếu bằng chứng, hệ thống từ chối hoặc nêu phần còn
+   thiếu thay vì đoán.
+6. **Sinh câu trả lời có căn cứ:** LLM chỉ nhận các đoạn đã qua cổng bằng
+   chứng. Phản hồi luôn kèm tên tệp, mã đoạn, trang và thông tin định vị để
+   người dùng kiểm tra lại nguồn.
+
+Không phải mọi tài liệu đều gọi LLM. PDF có lớp chữ được đọc trực tiếp; LLM
+chỉ tham gia khi cần sửa OCR/chuẩn hóa hoặc sinh câu trả lời cuối cùng.
+
 ## Chạy bằng Docker
 
 ```bash
@@ -69,38 +129,47 @@ Worker `ntc_document_rag_worker` xử lý tài liệu từ hàng đợi PostgreS
 
 Thư mục `documents/NTC_doc` là nguồn tài liệu ban đầu; MVP này chưa tự động nạp hàng loạt để tránh upload ngoài ý muốn. Bước tiếp theo có thể thêm job bulk-ingestion có dry-run, dedup theo SHA-256 và trạng thái xử lý chunk/embedding.
 
-## OCR tiếng Việt và định tuyến model
+## OCR và định tuyến mô hình NVIDIA
 
 Pipeline mặc định dùng `DOCUMENT_PARSER_ENGINE=auto`:
 
-1. PDF có lớp text: Docling đọc text trực tiếp, không OCR và không gọi LLM.
-2. PDF scan/JPG/PNG: render ở 180 DPI, chạy Tesseract `vie+eng` song song theo trang.
-3. Nếu Tesseract lỗi: fallback sang PP-OCRv6 GPU local tại `http://host.docker.internal:8012`.
-4. Nếu confidence Tesseract dưới `0.93`: sửa lỗi OCR bằng Qwen local tại cổng `8027`.
-5. Nếu Qwen local lỗi và có `NGC_API_KEY`: fallback NVIDIA NIM hosted API; nếu cả hai lỗi thì giữ nguyên kết quả rule-based.
+1. PDF có lớp chữ: Docling đọc trực tiếp, không OCR và không gọi mô hình OCR.
+2. PDF scan/JPG/PNG: render theo trang và gửi tới
+   `nvidia/nemotron-ocr-v2` tại NVIDIA NeMo Retriever OCR.
+3. Kết quả OCR lưu văn bản, tọa độ vùng chữ và độ tin cậy để tạo provenance.
+4. Chỉ khi cần sửa OCR hoặc chuẩn hóa cấu trúc, hệ thống mới gọi
+   `meta/llama-3.2-11b-vision-instruct` qua NVIDIA NIM.
+5. Nếu NVIDIA OCR không khả dụng, tài liệu được đánh dấu lỗi để tránh âm thầm
+   chuyển sang Tesseract hoặc PP-OCR cục bộ làm thay đổi kết quả benchmark.
 
 Kết quả lưu cả `raw_ocr_text` và `ocr_text` sau hậu xử lý. Metadata có parser, confidence, thời gian extraction và provider normalization để theo dõi chất lượng/latency.
 
 Các chế độ vận hành:
 
 - `DOCUMENT_PARSER_ENGINE=auto`: khuyến nghị cho luồng tiếng Việt hỗn hợp.
-- `DOCUMENT_PARSER_ENGINE=tesseract`: ép OCR Tesseract trực tiếp.
-- `DOCUMENT_PARSER_ENGINE=ppocr`: ép PP-OCRv6 local, phù hợp khi cần orientation/unwarping.
+- `DOCUMENT_PARSER_ENGINE=nvidia_ocr`: ép NVIDIA NeMo Retriever OCR v2.
 - `DOCUMENT_PARSER_ENGINE=ragflow`: DeepDoc cho tài liệu có layout/bảng phức tạp.
 - `DOCUMENT_PARSER_ENGINE=docling`: pipeline Docling đầy đủ.
-- `SEMANTIC_NORMALIZER=auto|local|nvidia|none`: chọn chiến lược sửa OCR/semantic.
+- `SEMANTIC_NORMALIZER=nvidia`: dùng NVIDIA NIM cho chuẩn hóa; đây là mặc định.
 
 Các biến tuning chính:
 
 ```dotenv
-DOCLING_OCR_LANG=vie,eng
-DOCLING_TESSERACT_PSM=3
 LOCAL_OCR_DPI=180
-TESSERACT_PAGE_CONCURRENCY=4
-SEMANTIC_NORMALIZER=auto
+SEMANTIC_NORMALIZER=nvidia
 SEMANTIC_NORMALIZE_OCR_ONLY=true
 SEMANTIC_OCR_CONFIDENCE_GATE=0.93
+NVIDIA_OCR_BASE_URL=https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2
+NVIDIA_OCR_MODEL=nvidia/nemotron-ocr-v2
+NVIDIA_OCR_BATCH_SIZE=2
+NVIDIA_OCR_CONCURRENCY=4
+INGESTION_WORKER_CONCURRENCY=2
 ```
+
+Worker nhận tối đa `INGESTION_WORKER_CONCURRENCY` tài liệu trong một lượt và
+xử lý đồng thời. Mỗi tài liệu tiếp tục được chia trang thành các lô OCR, vì
+vậy nhiều tài liệu và nhiều trang không còn bị xếp hàng tuần tự trong một
+worker.
 
 Kiểm tra sau khi chạy:
 

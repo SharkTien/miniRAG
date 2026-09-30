@@ -25,6 +25,9 @@ from app.config.settings import (
     NIM_MODEL,
     NIM_CONCURRENCY,
     NIM_TIMEOUT_SECONDS,
+    NIM_REQUEST_TIMEOUT_SECONDS,
+    NIM_MAX_RETRIES,
+    NIM_NORMALIZATION_DEADLINE_SECONDS,
     NIM_MAX_INPUT_CHARS,
 )
 from app.config.prompts import NIM_NORMALIZATION_SYSTEM_PROMPT
@@ -137,7 +140,10 @@ def _validate_patch(value: dict, source_elements: list[dict]) -> dict:
     }
 
 
-def _call_nim_api(payload_dict: dict, max_retries: int = 3) -> tuple[dict | None, str | None]:
+def _call_nim_api(
+    payload_dict: dict,
+    max_retries: int = NIM_MAX_RETRIES,
+) -> tuple[dict | None, str | None]:
     """Execute HTTP call to NVIDIA NIM API with backoff on rate-limits/network errors (Rule 10)."""
     api_key = NGC_API_KEY
     if not api_key:
@@ -158,7 +164,11 @@ def _call_nim_api(payload_dict: dict, max_retries: int = 3) -> tuple[dict | None
     for attempt in range(1, max_retries + 1):
         req = Request(endpoint, data=body, headers=headers, method="POST")
         try:
-            with urlopen(req, timeout=NIM_TIMEOUT_SECONDS) as response:
+            # Use a short, explicit socket timeout for this enrichment call.
+            # NIM_TIMEOUT_SECONDS is kept for backwards compatibility, but a
+            # slow normalizer must not block the document worker indefinitely.
+            request_timeout = min(NIM_TIMEOUT_SECONDS, NIM_REQUEST_TIMEOUT_SECONDS)
+            with urlopen(req, timeout=request_timeout) as response:
                 resp_data = json.loads(response.read().decode("utf-8"))
             choice = resp_data["choices"][0]
             content = choice["message"]["content"]
@@ -227,7 +237,10 @@ def _normalize_single_page_window(
             {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
         ],
         "temperature": 0.1,
-        "max_tokens": 4096,
+        # The normalizer returns a minimal patch, not a copy of the page.
+        # Keeping this bounded prevents a large OCR page from waiting for a
+        # long, truncated JSON response.
+        "max_tokens": 2048,
         "stream": False,
         "response_format": {"type": "json_object"},
     }
@@ -356,8 +369,9 @@ def normalize_parallel(
     errors_recorded: list[str] = []
     completed_windows = 0
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_concurrency) as executor:
-        future_to_index = {}
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=actual_concurrency)
+    future_to_index = {}
+    try:
         for idx, (page_tag, window_elements) in enumerate(page_windows):
             window_text = "\n\n".join(str(item.get("text", "")) for item in window_elements)
             print(f"[NIM Normalizer] Dispatching window {idx + 1}/{total_pages} ({page_tag}, {len(window_elements)} elements)...", flush=True)
@@ -368,15 +382,32 @@ def normalize_parallel(
                 window_elements,
             )
             future_to_index[future] = (idx, page_tag)
-            
-        for future in concurrent.futures.as_completed(future_to_index):
+
+        done, pending = concurrent.futures.wait(
+            future_to_index,
+            timeout=NIM_NORMALIZATION_DEADLINE_SECONDS,
+        )
+
+        def fallback_for(idx: int, warning: str) -> dict:
+            return {
+                "title": None,
+                "sections": [],
+                "elements": [
+                    {
+                        "element_id": str(item.get("element_id")),
+                        "type": item.get("element_type", "text"),
+                        "text": str(item.get("text", "")),
+                        "page": item.get("page"),
+                        "bbox": item.get("bbox"),
+                    }
+                    for item in page_windows[idx][1]
+                ],
+                "warnings": [warning],
+            }
+
+        for future in done:
             idx, page_tag = future_to_index[future]
             completed_windows += 1
-            if progress_callback:
-                try:
-                    progress_callback(completed_windows, total_pages)
-                except Exception as cb_err:
-                    print(f"[NIM Normalizer] Callback error: {cb_err}", flush=True)
             try:
                 res_dict, err = future.result()
                 results_indexed[idx] = res_dict
@@ -386,25 +417,40 @@ def normalize_parallel(
                 else:
                     print(f"[NIM Normalizer] Window {page_tag} finished successfully ({completed_windows}/{total_pages})", flush=True)
             except Exception as exc:
-                print(f"[NIM Normalizer] Window {page_tag} exception: {exc}", flush=True)
                 errors_recorded.append(f"[{page_tag}] Exception: {exc}")
-                # Fallback on exception
-                fallback_elements = [
-                    {
-                        "element_id": str(item.get("element_id")),
-                        "type": item.get("element_type", "text"),
-                        "text": str(item.get("text", "")),
-                        "page": item.get("page"),
-                        "bbox": item.get("bbox"),
-                    }
-                    for item in page_windows[idx][1]
-                ]
-                results_indexed[idx] = {
-                    "title": None,
-                    "sections": [],
-                    "elements": fallback_elements,
-                    "warnings": [str(exc)],
-                }
+                results_indexed[idx] = fallback_for(idx, str(exc))
+                print(f"[NIM Normalizer] Window {page_tag} exception: {exc}", flush=True)
+            if progress_callback:
+                try:
+                    progress_callback(completed_windows, total_pages)
+                except Exception as cb_err:
+                    print(f"[NIM Normalizer] Callback error: {cb_err}", flush=True)
+
+        if pending:
+            timeout_message = (
+                f"NIM normalization deadline exceeded ({NIM_NORMALIZATION_DEADLINE_SECONDS}s)"
+            )
+            print(
+                f"[NIM Normalizer] {len(pending)} window(s) exceeded deadline; "
+                "using OCR text fallback.",
+                flush=True,
+            )
+            for future in pending:
+                idx, page_tag = future_to_index[future]
+                future.cancel()
+                results_indexed[idx] = fallback_for(idx, timeout_message)
+                errors_recorded.append(f"[{page_tag}] {timeout_message}")
+                completed_windows += 1
+                if progress_callback:
+                    try:
+                        progress_callback(completed_windows, total_pages)
+                    except Exception as cb_err:
+                        print(f"[NIM Normalizer] Callback error: {cb_err}", flush=True)
+    finally:
+        # Do not wait for a stuck network thread after the deadline. The
+        # request itself has a bounded socket timeout and will exit shortly;
+        # ingestion can continue with the deterministic OCR fallback now.
+        executor.shutdown(wait=False, cancel_futures=True)
                 
     elapsed = time.time() - start_time
     print(f"[NIM Normalizer] Completed {total_pages} page windows in {elapsed:.2f}s (parallel speedup achieved)", flush=True)

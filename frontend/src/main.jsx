@@ -312,6 +312,7 @@ export default function App() {
     return mode === 'documents' ? id : null
   })
   const [loadingDocs, setLoadingDocs] = useState(false)
+  const [documentsLoadError, setDocumentsLoadError] = useState(false)
   const [uploading, setUploading] = useState(false)
 
   // Real Database Conversations
@@ -343,23 +344,13 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [pendingJob, setPendingJob] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('rag_pending_job') || 'null') } catch (_) { return null }
+  })
   const [searchingQuery, setSearchingQuery] = useState('')
-  const [queryingDocIndex, setQueryingDocIndex] = useState(0)
   const chatBottomRef = useRef(null)
   const fileInputRef = useRef(null)
   const chatInputRef = useRef(null)
-
-  // Hiệu ứng cập nhật hiển thị tài liệu liên tục khi đang truy vấn RAG
-  useEffect(() => {
-    if (!chatLoading || !documents || documents.length === 0) {
-      setQueryingDocIndex(0)
-      return
-    }
-    const interval = setInterval(() => {
-      setQueryingDocIndex(prev => (prev + 1) % documents.length)
-    }, 700)
-    return () => clearInterval(interval)
-  }, [chatLoading, documents])
 
   // Kiểm tra văn bản nhập vào có phải nhiều dòng không (để chuyển từ 1 dòng sang hình hộp)
   const isInputMultiline = useMemo(() => {
@@ -380,6 +371,21 @@ export default function App() {
       }
     }
   }, [chatInput, isInputMultiline])
+
+  // Hai chế độ nhập dùng hai textarea khác nhau. Khi dán nội dung dài,
+  // React thay phần tử và trình duyệt sẽ mất focus; khôi phục focus ngay
+  // sau khi phần tử mới được render.
+  useEffect(() => {
+    if (chatInputRef.current) {
+      chatInputRef.current.focus()
+      const length = chatInputRef.current.value.length
+      try {
+        chatInputRef.current.setSelectionRange(length, length)
+      } catch (_) {
+        // Một số trình duyệt không cho đặt selection trong lúc đang chuyển DOM.
+      }
+    }
+  }, [isInputMultiline])
 
   // Tự động cuộn mượt mà xuống sát đáy khi có câu hỏi mới hoặc tin nhắn mới
   useEffect(() => {
@@ -599,9 +605,13 @@ export default function App() {
         const data = await res.json()
         const docs = data.items || data.documents || []
         setDocuments(docs)
+        setDocumentsLoadError(false)
+      } else {
+        setDocumentsLoadError(true)
       }
     } catch (err) {
       console.error('Error fetching documents:', err)
+      setDocumentsLoadError(true)
     } finally {
       setLoadingDocs(false)
     }
@@ -630,13 +640,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const delay = hasProcessingDocs ? 1500 : 6000
+    const delay = hasProcessingDocs || documentsLoadError ? 1500 : 6000
     const interval = setInterval(() => {
       fetchDocuments()
       fetchConversations()
     }, delay)
     return () => clearInterval(interval)
-  }, [hasProcessingDocs])
+  }, [hasProcessingDocs, documentsLoadError])
 
   // Selected document (NO fallback to docs[0] so preview only shows when explicitly selected)
   const currentDoc = useMemo(() => {
@@ -776,11 +786,30 @@ export default function App() {
     }
   }
 
+  // Khôi phục nội dung cuộc trò chuyện đang nằm trong hash sau F5. Trước đây
+  // chỉ danh sách cuộc trò chuyện được tải lại, còn chatMessages vẫn rỗng.
+  useEffect(() => {
+    if (activeConvId && chatMessages.length === 0) {
+      selectConversation(activeConvId)
+    }
+    // Chỉ chạy khi cuộc trò chuyện hiện tại hoặc danh sách từ API thay đổi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvId, conversations.length])
+
   // Handle Starting a New Conversation
   const handleNewChat = () => {
     setActiveConvId(null)
     setChatMessages([])
     setChatInput('')
+    // Mỗi hội thoại có ngữ cảnh và nguồn riêng; không giữ chunk của hội thoại trước.
+    setChatActiveSources([])
+    setChatActiveChunks([])
+    setChatActiveDocId(null)
+    setChatActiveDocName('')
+    setChatActiveQuery('')
+    setChatSidebarOpen(false)
+    localStorage.removeItem('rag_pending_job')
+    setPendingJob(null)
     setMainMode('chat')
     pushHash('chat', null)
   }
@@ -827,14 +856,63 @@ export default function App() {
     }
   }
 
+  // Rename Document (display name only; the uploaded file remains unchanged)
+  const handleRenameDoc = async (e, doc) => {
+    e.stopPropagation()
+    const currentName = getDocName(doc)
+    const extension = currentName.match(/\.[^/.]+$/)?.[0] || ''
+    const suggestedName = currentName.replace(/\.[^/.]+$/, '')
+    const enteredName = window.prompt('Tên hiển thị mới của tài liệu:', suggestedName)
+    if (enteredName === null) return
+    let displayName = enteredName.trim()
+    if (!displayName) {
+      alert('Tên tài liệu không được để trống.')
+      return
+    }
+    if (extension && !/\.[^/.]+$/.test(displayName)) displayName += extension
+    try {
+      const res = await fetch(`/api/documents/${doc.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: displayName }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || res.statusText)
+      }
+      const updated = await res.json()
+      setDocuments(prev => prev.map(item => (
+        String(item.id) === String(doc.id)
+          ? { ...item, filename: updated.display_name, original_filename: updated.original_filename }
+          : item
+      )))
+    } catch (err) {
+      console.error('Error renaming document:', err)
+      alert(`Không thể đổi tên tài liệu: ${err.message}`)
+    }
+  }
+
   // Upload File
   const handleFileUpload = async (files) => {
     if (!files || files.length === 0) return
     setUploading(true)
 
+    const selectedFiles = Array.from(files)
     const formData = new FormData()
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i])
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i]
+      const extension = file.name.match(/\.[^/.]+$/)?.[0] || ''
+      const suggestedName = file.name.replace(/\.[^/.]+$/, '')
+      const enteredName = window.prompt(
+        `Tên hiển thị cho tài liệu “${file.name}” (bấm Hủy để giữ tên gốc):`,
+        suggestedName,
+      )
+      let displayName = (enteredName || '').trim()
+      if (!displayName) displayName = file.name
+      else if (extension && !/\.[^/.]+$/.test(displayName)) displayName += extension
+
+      formData.append('files', file)
+      formData.append('display_names', displayName)
     }
 
     try {
@@ -861,15 +939,18 @@ export default function App() {
   }
 
   // Real RAG Chat Handler (Persisting into PostgreSQL database)
-  const handleSendChat = async (presetText) => {
+  const handleSendChat = async (presetText, fromInput = false) => {
     const query = (presetText || chatInput).trim()
     if (!query || chatLoading) return
 
     const tempUserMsg = { role: 'user', text: query }
     setChatMessages(prev => [...prev, tempUserMsg])
-    if (!presetText) setChatInput('')
+    if (!presetText || fromInput) setChatInput('')
     setChatLoading(true)
     setSearchingQuery(query)
+    const job = { id: crypto.randomUUID(), conversationId: activeConvId || null, question: query, status: 'running', startedAt: new Date().toISOString() }
+    setPendingJob(job)
+    localStorage.setItem('rag_pending_job', JSON.stringify(job))
 
     try {
       let targetConvId = activeConvId
@@ -891,26 +972,67 @@ export default function App() {
         top_k: 10
       }
 
-      const res = await fetch(`/api/conversations/${targetConvId}/messages`, {
+      const res = await fetch(`/api/query/stream?conversation_id=${encodeURIComponent(targetConvId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload)
       })
 
       if (res.ok) {
-        const data = await res.json()
-        const sources = data.sources || []
-        const chunks = data.retrieved_chunks || []
-        setChatMessages(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            text: data.answer || 'Không tìm thấy câu trả lời phù hợp trong tài liệu.',
-            sources: sources,
-            retrieved_chunks: chunks,
-            searchQuery: query
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let answerText = ''
+        let sources = []
+        let chunks = []
+        setChatMessages(prev => [...prev, { role: 'assistant', text: '', sources: [], retrieved_chunks: [], searchQuery: query }])
+        const updateAssistant = (extra = {}) => setChatMessages(prev => {
+          const copy = [...prev]
+          const idx = copy.length - 1
+          if (copy[idx]?.role === 'assistant') copy[idx] = { ...copy[idx], text: answerText, sources, retrieved_chunks: chunks, searchQuery: query, ...extra }
+          return copy
+        })
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const events = buffer.split('\n\n')
+          buffer = events.pop() || ''
+          for (const event of events) {
+            const line = event.split('\n').find(x => x.startsWith('data:'))
+            if (!line) continue
+            const raw = line.slice(5).trim()
+            if (raw === '[DONE]') continue
+            try {
+              const item = JSON.parse(raw)
+              if (item.type === 'token') { answerText += item.text || ''; updateAssistant() }
+              if (item.type === 'metadata') {
+                sources = item.sources || []
+                chunks = item.retrieved_chunks || []
+                setChatActiveSources(sources)
+                setChatActiveChunks(chunks)
+                const first = sources[0]
+                if (first) {
+                  setChatActiveDocId(resolveDocId(first.document_id || first.file_name))
+                  setChatActiveDocName(first.file_name || '')
+                }
+                updateAssistant()
+              }
+              if (item.type === 'error') { answerText = item.message || 'Không thể xử lý truy vấn RAG lúc này.'; updateAssistant() }
+            } catch (_) {}
           }
-        ])
+        }
+        // A completed stream must not leave an empty assistant bubble when
+        // metadata arrived successfully. The backend retries non-stream mode,
+        // but keep a visible fallback for an interrupted proxy/UI stream.
+        if (!answerText.trim()) {
+          answerText = sources.length
+            ? 'Đã tìm thấy tài liệu liên quan nhưng chưa nhận được phần trả lời từ mô hình. Vui lòng gửi lại câu hỏi.'
+            : 'Chưa nhận được phản hồi từ hệ thống. Vui lòng thử lại.'
+          updateAssistant()
+        }
+        localStorage.removeItem('rag_pending_job')
+        setPendingJob(null)
         if (sources.length > 0) {
           setChatActiveSources(sources)
           setChatActiveChunks(chunks)
@@ -922,6 +1044,8 @@ export default function App() {
         }
         fetchConversations()
       } else {
+        localStorage.removeItem('rag_pending_job')
+        setPendingJob(null)
         setChatMessages(prev => [
           ...prev,
           {
@@ -932,6 +1056,8 @@ export default function App() {
         ])
       }
     } catch (err) {
+      localStorage.removeItem('rag_pending_job')
+      setPendingJob(null)
       setChatMessages(prev => [
         ...prev,
         {
@@ -1106,7 +1232,11 @@ export default function App() {
             ) : (
               documents.length === 0 ? (
                 <div className="px-3 py-6 text-xs text-[var(--text-muted)] text-center">
-                  Chưa có tài liệu nào.
+                  {loadingDocs
+                    ? 'Đang tải danh sách tài liệu...'
+                    : documentsLoadError
+                      ? 'Chưa kết nối được máy chủ, đang thử lại...'
+                      : 'Chưa có tài liệu nào.'}
                 </div>
               ) : (
                 documents.map(d => {
@@ -1159,6 +1289,13 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+                      <button
+                        onClick={(e) => handleRenameDoc(e, d)}
+                        className="opacity-0 group-hover:opacity-100 hover:text-blue-500 p-1 rounded transition text-[var(--text-muted)] ml-1 shrink-0"
+                        title="Đổi tên tài liệu"
+                      >
+                        <Icon name="edit" className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={(e) => handleDeleteDoc(e, d.id)}
                         className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-1 rounded transition text-[var(--text-muted)] ml-1 shrink-0"
@@ -1268,7 +1405,9 @@ export default function App() {
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              handleSendChat()
+                              // Đọc trực tiếp giá trị textarea để không bị trễ state
+                              // khi người dùng vừa dán nội dung rồi nhấn Enter ngay.
+                              handleSendChat(e.currentTarget.value, true)
                             }
                           }}
                           placeholder="Hỏi bất kỳ điều gì..."
@@ -1310,7 +1449,7 @@ export default function App() {
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              handleSendChat()
+                              handleSendChat(e.currentTarget.value, true)
                             }
                           }}
                           placeholder="Hỏi bất kỳ điều gì..."
@@ -1393,10 +1532,18 @@ export default function App() {
 
                           <div className="assistant-chat-card p-5 flex-1 space-y-2">
                             {/* 1. Lời giải đáp / Nội dung câu trả lời */}
-                            <div
-                              className="prose prose-xs md:prose-sm dark:prose-invert max-w-none leading-relaxed text-[var(--text-primary)]"
-                              dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
-                            />
+                            {(!msg.text && chatLoading && index === chatMessages.length - 1) ? (
+                              <div className="flex items-center gap-1.5 h-6" aria-label="Mô hình đang sinh câu trả lời">
+                                <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.25s]" />
+                                <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.12s]" />
+                                <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" />
+                              </div>
+                            ) : (
+                              <div
+                                className="prose prose-xs md:prose-sm dark:prose-invert max-w-none leading-relaxed text-[var(--text-primary)]"
+                                dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                              />
+                            )}
 
                             {/* 2. Trích nguồn ở cuối lời khẳng định (Đã ẩn số trang theo yêu cầu) */}
                             {msg.sources && msg.sources.length > 0 && (
@@ -1474,8 +1621,9 @@ export default function App() {
                       )
                     })}
 
-                    {/* Khi đang truy vấn: Cập nhật hiển thị tài liệu liên tục */}
-                    {chatLoading && (
+                    {/* Khi đang truy vấn: chỉ hiển thị trạng thái thật, không giả lập
+                        việc duyệt tuần tự toàn bộ kho tài liệu. */}
+                    {(chatLoading || pendingJob) && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
                       <div className="flex items-start gap-3">
                         <div className="w-8 h-8 rounded-full overflow-hidden border border-white/80 shrink-0 mt-1">
                           <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
@@ -1489,34 +1637,7 @@ export default function App() {
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
                             </span>
-                            <span className="text-[var(--text-muted)] font-normal">Đang truy vấn tài liệu:</span>
-                            {(() => {
-                              if (documents && documents.length > 0) {
-                                const activeDoc = documents[queryingDocIndex % documents.length]
-                                const docName = getDocName(activeDoc).replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
-                                return (
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <span
-                                      key={queryingDocIndex}
-                                      className="font-semibold text-blue-600 dark:text-blue-400 truncate max-w-[280px] sm:max-w-[420px] transition-all duration-200"
-                                      title={docName}
-                                    >
-                                      {docName}
-                                    </span>
-                                    {documents.length > 1 && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 font-medium shrink-0">
-                                        {(queryingDocIndex % documents.length) + 1}/{documents.length}
-                                      </span>
-                                    )}
-                                  </div>
-                                )
-                              }
-                              return (
-                                <span className="font-semibold text-[var(--text-primary)]">
-                                  {chatActiveDocName ? chatActiveDocName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ') : 'Kho tài liệu tri thức'}
-                                </span>
-                              )
-                            })()}
+                            <span className="text-[var(--text-muted)] font-normal">{pendingJob && !chatLoading ? 'Job đang được khôi phục sau khi tải lại trang...' : 'Đang tìm các đoạn nội dung phù hợp trong kho tài liệu...'}</span>
                           </div>
                         </div>
                       </div>
@@ -1556,7 +1677,7 @@ export default function App() {
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              handleSendChat()
+                              handleSendChat(e.currentTarget.value, true)
                             }
                           }}
                           placeholder="Hỏi bất kỳ điều gì..."
@@ -1604,7 +1725,7 @@ export default function App() {
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              handleSendChat()
+                              handleSendChat(e.currentTarget.value, true)
                             }
                           }}
                           placeholder="Hỏi bất kỳ điều gì..."
@@ -2023,7 +2144,7 @@ export default function App() {
                       </h3>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
                         {currentDoc.status === 'queued'
-                          ? 'Tệp đang xếp hàng chờ xử lý tuần tự (hệ thống xử lý từng tệp để tối ưu CPU/RAM), sẽ tự động bắt đầu ngay khi tệp trước hoàn thành.'
+                          ? 'Tệp đang xếp hàng và sẽ được worker nhận theo lô, đồng thời với các tài liệu khác trong giới hạn tài nguyên.'
                           : 'Hệ thống đang đọc và xử lý nội dung tài liệu, vui lòng chờ một chút'}
                       </p>
                     </div>

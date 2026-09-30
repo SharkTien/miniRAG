@@ -21,7 +21,7 @@ class DocumentRepository:
                 params = (limit, offset)
 
             docs = conn.execute(
-                f"SELECT id, original_filename, content_type, size_bytes, uploaded_by, status, created_at, error_message, (extracted_data->'metadata') as meta, progress, progress_stage FROM documents {where_clause} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                f"SELECT id, COALESCE(display_name, original_filename) AS display_name, content_type, size_bytes, uploaded_by, status, created_at, error_message, (extracted_data->'metadata') as meta, progress, progress_stage, original_filename FROM documents {where_clause} ORDER BY created_at DESC LIMIT %s OFFSET %s",
                 params
             ).fetchall()
             
@@ -32,13 +32,28 @@ class DocumentRepository:
             
         return docs, count
 
-    def create_document(self, doc_id, filename, object_key, content_type, size, actor, sha256):
+    def create_document(self, doc_id, filename, object_key, content_type, size, actor, sha256, display_name=None):
         """Create document."""
         with self.db.connect() as conn:
             conn.execute(
-                "INSERT INTO documents (id, original_filename, object_key, content_type, size_bytes, uploaded_by, sha256) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (doc_id, filename, object_key, content_type, size, actor, sha256)
+                "INSERT INTO documents (id, original_filename, display_name, object_key, content_type, size_bytes, uploaded_by, sha256) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (doc_id, filename, display_name, object_key, content_type, size, actor, sha256)
             )
+
+    def rename_document(self, doc_id, display_name: str, actor: str | None = None):
+        """Update only the user-facing name; keep the uploaded filename intact."""
+        with self.db.connect() as conn:
+            if actor and actor != "system":
+                result = conn.execute(
+                    "UPDATE documents SET display_name = %s WHERE id = %s AND uploaded_by = %s",
+                    (display_name, doc_id, actor),
+                )
+            else:
+                result = conn.execute(
+                    "UPDATE documents SET display_name = %s WHERE id = %s",
+                    (display_name, doc_id),
+                )
+            return result.rowcount > 0
 
     def get_next_queued_document(self):
         """Return next queued document."""
@@ -50,6 +65,32 @@ class DocumentRepository:
                 return None
             conn.execute("UPDATE documents SET status = 'processing', progress = 0, progress_stage = 'Bat dau xu ly' WHERE id = %s", (row[0],))
             return row[0]
+
+    def get_next_queued_documents(self, limit: int):
+        """Atomically claim a bounded batch of queued documents."""
+        limit = max(1, int(limit))
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                WITH picked AS (
+                    SELECT id
+                    FROM documents
+                    WHERE status = 'queued'
+                    ORDER BY created_at
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT %s
+                )
+                UPDATE documents AS d
+                SET status = 'processing',
+                    progress = 0,
+                    progress_stage = 'Bat dau xu ly theo lo'
+                FROM picked
+                WHERE d.id = picked.id
+                RETURNING d.id
+                """,
+                (limit,),
+            ).fetchall()
+            return [row[0] for row in rows]
 
     def requeue_processing_documents(self):
         """Return interrupted jobs to the queue after a worker restart."""
@@ -81,8 +122,8 @@ class DocumentRepository:
         """Return document status and data."""
         with self.db.connect() as conn:
             if actor and actor != 'system':
-                return conn.execute("SELECT status, original_filename, extracted_data FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, actor)).fetchone()
-            return conn.execute("SELECT status, original_filename, extracted_data FROM documents WHERE id = %s", (doc_id,)).fetchone()
+                return conn.execute("SELECT status, COALESCE(display_name, original_filename), extracted_data FROM documents WHERE id = %s AND uploaded_by = %s", (doc_id, actor)).fetchone()
+            return conn.execute("SELECT status, COALESCE(display_name, original_filename), extracted_data FROM documents WHERE id = %s", (doc_id,)).fetchone()
 
     def delete_document(self, doc_id, actor=None):
         """Delete document."""

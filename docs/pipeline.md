@@ -13,8 +13,8 @@ Tài liệu này mô tả toàn bộ luồng xử lý tài liệu từ khâu Ing
 ┌────────────────────────────────────────────────────────┐
 │ GIAI ĐOẠN 1: BÓC TÁCH & PHÂN TÍCH BỐ CỤC (LAYOUT)      │
 │                                                        │
-│  • Engine chính: RAGFlow DeepDoc (in-process / API)    │
-│  • Engine dự phòng: Docling OCR (Tesseract vie+eng)    │
+│  • PDF có lớp chữ: Docling đọc trực tiếp                 │
+│  • PDF scan/ảnh: NVIDIA NeMo Retriever OCR v2           │
 │  • Nhận diện: Paragraphs, Section Headers, Tables      │
 │  • Trích xuất tọa độ Bounding Boxes (OCR & Images)     │
 └────────────────────────────┬───────────────────────────┘
@@ -56,16 +56,17 @@ Tài liệu này mô tả toàn bộ luồng xử lý tài liệu từ khâu Ing
 
 ## 2. Chi Tiết Các Giai Đoạn Trong Pipeline
 
-### Giai Đoạn 1: Bóc Tách & Phân Tích Layout (Extraction & Layout Analysis)
-- **Engine**: Hỗ trợ linh hoạt giữa **RAGFlow DeepDoc** và **Docling**.
-  - Cấu hình qua `.env`: `DOCUMENT_PARSER_ENGINE=ragflow` hoặc `docling`.
-- **Cơ chế hoạt động của RAGFlow DeepDoc**:
-  - Tự động nhận diện tài liệu dạng văn bản số hóa (native text) hoặc bản scan hình ảnh.
-  - Phân tích bố cục đa cột, dòng kẻ, khối văn bản.
-  - Nhận diện và bóc tách bảng biểu (`Table Structure Recognition`), giữ nguyên cấu trúc dòng và cột.
-  - Trích xuất tọa độ **Bounding Box (BBox)**:
-    - BBox của từng dòng chữ (`ocr_bboxes`): Phục vụ truy vết vị trí evidence trong API.
-    - BBox của hình ảnh và bảng biểu (`image_bboxes`): Phục vụ việc cắt ảnh và hiển thị trực quan cho người dùng.
+### Giai Đoạn 1: Bóc Tách & Phân Tích Bố Cục
+- **Xử lý tài liệu theo lô**: worker dùng `FOR UPDATE SKIP LOCKED` để nhận một
+  nhóm tài liệu đang chờ, sau đó xử lý song song với giới hạn
+  `INGESTION_WORKER_CONCURRENCY`. Cách này tránh một tài liệu dài chặn toàn bộ
+  các tài liệu phía sau.
+- **PDF có lớp chữ**: Docling đọc trực tiếp để không phát sinh lượt gọi OCR.
+- **PDF scan và ảnh**: NVIDIA NeMo Retriever OCR v2 nhận ảnh JPEG theo trang,
+  trả văn bản, độ tin cậy và tọa độ vùng chữ.
+- **Bảng và bố cục phức tạp**: RAGFlow DeepDoc vẫn là chế độ tùy chọn.
+- Tọa độ chữ (`ocr_bboxes`) và hình (`image_bboxes`) được lưu để truy vết
+  nguồn và hiển thị bằng chứng.
 
 ### Giai Đoạn 2: Làm Sạch Quy Tắc (Rule-based Clean & Page Partitioning)
 - Xóa bỏ các ký tự vô nghĩa sinh ra trong quá trình OCR.
@@ -75,7 +76,8 @@ Tài liệu này mô tả toàn bộ luồng xử lý tài liệu từ khâu Ing
 
 ### Giai Đoạn 3: Chuẩn Hóa Ngữ Nghĩa Song Song Qua NVIDIA NIM (Semantic Normalization)
 - **Nền tảng**: NVIDIA NIM Cloud API (`https://integrate.api.nvidia.com/v1`).
-- **Model**: `meta/llama-3.2-11b-vision-instruct` (hoặc `meta/llama-3.3-70b-instruct`).
+- **Model**: `meta/llama-3.2-11b-vision-instruct` qua NVIDIA NIM; đây là cấu hình
+  mặc định chi phí thấp hơn cho giai đoạn thử nghiệm.
 - **Xử lý song song (Parallel Processing)**:
   - Thay vì gửi tuần tự từng trang gây chậm trễ, hệ thống sử dụng `ThreadPoolExecutor` gửi đồng thời 4 trang cùng lúc (`NIM_CONCURRENCY=4`).
   - Tốc độ xử lý tài liệu 10–20 trang được rút ngắn từ vài phút xuống còn vài chục giây.
@@ -84,7 +86,8 @@ Tài liệu này mô tả toàn bộ luồng xử lý tài liệu từ khâu Ing
   - Phục hồi các từ ngữ tiếng Việt bị mất dấu hoặc sai sót do OCR scan mờ.
 - **Cơ chế chịu lỗi (Fault Tolerance & Resilience)**:
   - Bắt lỗi HTTP 429 (Rate Limit) với Exponential Backoff & Jitter.
-  - Nếu một trang bất kỳ bị timeout mạng, pipeline **tự động fallback** về dữ liệu Rule-based của trang đó mà không làm đứt gãy luồng xử lý chung.
+  - Nếu chuẩn hóa timeout, pipeline giữ dữ liệu OCR gốc. Nếu OCR NVIDIA lỗi,
+    tài liệu được đánh dấu lỗi để không chuyển ngầm sang mô hình khác.
 
 ### Giai Đoạn 4: Phân Đoạn Văn Bản (Chunking) & Lưu Trữ
 - **Công cụ**: Sử dụng **LlamaIndex** Sentence Splitter.
@@ -105,10 +108,15 @@ Tài liệu này mô tả toàn bộ luồng xử lý tài liệu từ khâu Ing
 
 | Tham Số | Giá Trị Mặc Định | Ý Nghĩa |
 | :--- | :--- | :--- |
-| `DOCUMENT_PARSER_ENGINE` | `ragflow` | Engine bóc tách chính (`ragflow` hoặc `docling`) |
+| `DOCUMENT_PARSER_ENGINE` | `auto` | Định tuyến Docling native text hoặc NVIDIA OCR |
 | `RAGFLOW_MODE` | `deepdoc` | Chế độ chạy RAGFlow (`deepdoc` in-process hoặc `api`) |
 | `NGC_API_KEY` | *(Key của bạn)* | API Key truy cập NVIDIA NIM Cloud |
 | `NIM_MODEL` | `meta/llama-3.2-11b-vision-instruct` | Model LLM chuẩn hóa văn bản |
 | `NIM_CONCURRENCY` | `4` | Số trang gửi song song lên NIM |
 | `NIM_TIMEOUT_SECONDS` | `150` | Thời gian chờ tối đa cho mỗi trang |
+| `NVIDIA_OCR_BASE_URL` | `https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2` | Endpoint OCR NVIDIA |
+| `NVIDIA_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | Mô hình OCR tài liệu |
+| `NVIDIA_OCR_BATCH_SIZE` | `2` | Số trang gửi trong một yêu cầu OCR |
+| `NVIDIA_OCR_CONCURRENCY` | `4` | Số yêu cầu OCR chạy song song |
+| `INGESTION_WORKER_CONCURRENCY` | `2` | Số tài liệu worker xử lý đồng thời |
 | `HF_KEY` / `HF_TOKEN` | *(Key của bạn)* | Token Hugging Face tải layout models nhanh hơn |

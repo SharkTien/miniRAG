@@ -16,7 +16,7 @@ Client
   │                                  ▼
   │                       background worker / ExtractService
   │                                  │
-  │             Docling/DeepDoc/RAGFlow/Tesseract/PP-OCR extraction
+  │             Docling native text or NVIDIA NeMo Retriever OCR v2
   │                                  │
   │             normalize → semantic chunk → embedding
   │                                  │
@@ -39,8 +39,9 @@ Client
 1. `DocumentService` validates the extension and upload size, calculates a
    SHA-256 checksum, stores the file in MinIO, and creates a `queued` row.
 2. `app.worker` claims queued documents and calls `ExtractService`.
-3. Native PDFs use the text layer when it is reliable. Scan or mixed PDFs are
-   routed to Tesseract, PP-OCR or Docling according to environment policy.
+3. Native PDFs use the text layer when it is reliable. Scan PDFs and images are
+   rendered by the worker and routed to NVIDIA NeMo Retriever OCR v2. The OCR
+   response supplies text, confidence and normalized bounding boxes.
 4. `NormalizeService` removes control characters and repeated page noise,
    preserves page/bounding-box provenance, and creates structure-aware chunks.
 5. Each chunk receives an embedding and metadata including document id,
@@ -92,15 +93,16 @@ and `/api/documents`.
 
 Runtime values are read from environment variables. Start from `.env.example`;
 do not commit `.env`, API keys or GitHub credentials. The important tuning
-values are `DOCUMENT_PARSER_ENGINE`, `SEMANTIC_NORMALIZER`,
-`PERSIST_PAGE_VISUALS`, `EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`,
-`CHUNK_OVERLAP`, `TOP_K` and `SIMILARITY_THRESHOLD`.
+values are `DOCUMENT_PARSER_ENGINE`, `NVIDIA_OCR_BASE_URL`,
+`NVIDIA_OCR_MODEL`, `NVIDIA_OCR_BATCH_SIZE`, `NVIDIA_OCR_CONCURRENCY`,
+`SEMANTIC_NORMALIZER`, `PERSIST_PAGE_VISUALS`,
+`EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K` and
+`SIMILARITY_THRESHOLD`.
 
-The default parser path is local Docling/DeepDoc. RAGFlow server mode is an
-optional integration: install a compatible `ragflow-sdk` version separately
-when `RAGFLOW_MODE=api` is enabled. It is intentionally excluded from the
-core requirements because its dependency constraints conflict with the local
-DeepDoc parser.
+The default parser path uses native Docling text when available and NVIDIA
+NeMo Retriever OCR v2 for scans. RAGFlow server mode remains an optional
+integration for complex layouts; it is excluded from the core requirements
+because its dependency constraints conflict with the local parser.
 
 ## Limits and next improvements
 

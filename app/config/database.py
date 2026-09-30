@@ -35,6 +35,9 @@ class DatabaseManager:
                 )
             ''')
                 conn.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS sha256 TEXT")
+                # User-facing name is separate from the immutable uploaded
+                # filename so renaming never breaks storage or extension detection.
+                conn.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS display_name TEXT")
                 conn.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress SMALLINT DEFAULT 0")
                 conn.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress_stage TEXT DEFAULT ''")
                 conn.execute("UPDATE documents SET progress = 100 WHERE status = 'processed' AND COALESCE(progress, 0) = 0")

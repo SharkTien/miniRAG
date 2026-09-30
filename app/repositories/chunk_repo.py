@@ -47,6 +47,20 @@ def _bm25_scores(query: str, contents: List[str]) -> List[float]:
     return scores
 
 
+def _or_tsquery(query: str) -> str:
+    """Build a safe PostgreSQL ``tsquery`` that recalls any query term.
+
+    ``plainto_tsquery`` joins terms with AND.  A natural question almost never
+    has every answer-bearing term in one chunk (for example the Shopee table
+    row contains ``Napas`` and ``2 - 5 ngày`` but not the word ``Shopee``), so
+    the old AND expression discarded the exact answer row before reranking.
+    BM25 and the evidence layer still score the returned candidates; this
+    helper only widens lexical recall.
+    """
+    terms = list(dict.fromkeys(re.findall(r"[\wÀ-ỹ]+", (query or "").casefold(), re.UNICODE)))
+    return " | ".join(term for term in terms if len(term) > 1)
+
+
 class ChunkRepository:
     """Provide the chunkrepository application component."""
     def __init__(self, db: DatabaseManager):
@@ -107,6 +121,34 @@ class ChunkRepository:
         logger.info("Đã lưu %d chunks vào database cho document_id: %s", inserted_count, document_id)
         return inserted_count
 
+    def find_document_ids_by_topics(self, terms: List[str], limit: int = 32) -> List[str]:
+        """Resolve a narrow document scope before chunk retrieval.
+
+        Filename and existing chunk text act as a lightweight document profile
+        for deployments that have not yet populated explicit topic metadata.
+        This is intentionally a candidate filter, not the final relevance
+        decision; BM25/dense and reranking still run inside the returned scope.
+        """
+        values = list(dict.fromkeys(str(term).strip().casefold() for term in terms if str(term).strip()))[:8]
+        if not values:
+            return []
+        clauses = []
+        params: list[Any] = []
+        for term in values:
+            pattern = f"%{term}%"
+            clauses.append("(lower(COALESCE(d.display_name, d.original_filename)) LIKE %s OR lower(d.original_filename) LIKE %s OR EXISTS (SELECT 1 FROM document_chunks cx WHERE cx.document_id = d.id AND lower(cx.content) LIKE %s))")
+            params.extend([pattern, pattern, pattern])
+        sql = f"""
+            SELECT d.id
+            FROM documents d
+            WHERE d.status = 'processed' AND ({' OR '.join(clauses)})
+            ORDER BY d.created_at DESC
+            LIMIT %s
+        """
+        params.append(max(1, min(int(limit), 100)))
+        with self.db.connect() as conn:
+            return [str(row[0]) for row in conn.execute(sql, params).fetchall()]
+
     def vector_search(
         self,
         query_embedding: List[float],
@@ -133,6 +175,7 @@ class ChunkRepository:
                     hybrid_where_params.append(document_id)
                 hybrid_where_sql = " AND ".join(hybrid_where_clauses)
                 text_clean = query_text.strip()
+                lexical_query = _or_tsquery(text_clean)
 
                 hybrid_sql = f"""
                     WITH vector_ranked AS (
@@ -145,10 +188,10 @@ class ChunkRepository:
                     ),
                     text_ranked AS (
                         SELECT c.id,
-                               ts_rank_cd(to_tsvector('simple', c.content), plainto_tsquery('simple', %s)) AS text_score,
-                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('simple', c.content), plainto_tsquery('simple', %s)) DESC) AS rnk
+                               ts_rank_cd(to_tsvector('simple', c.content), to_tsquery('simple', %s)) AS text_score,
+                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('simple', c.content), to_tsquery('simple', %s)) DESC) AS rnk
                         FROM document_chunks c
-                    WHERE to_tsvector('simple', c.content) @@ plainto_tsquery('simple', %s)
+                    WHERE to_tsvector('simple', c.content) @@ to_tsquery('simple', %s)
                               {"AND c.document_id = %s" if document_id else ""}
                         LIMIT 50
                     )
@@ -158,7 +201,7 @@ class ChunkRepository:
                         c.chunk_index,
                         c.content,
                         c.metadata,
-                        d.original_filename,
+                        COALESCE(d.display_name, d.original_filename),
                         COALESCE(vr.sim_score, 0.0) AS dense_score,
                         COALESCE(tr.text_score, 0.0) AS lexical_score,
                         (COALESCE(1.0 / (60.0 + vr.rnk), 0.0) + COALESCE(1.0 / (60.0 + tr.rnk), 0.0)) AS rrf_score
@@ -175,9 +218,9 @@ class ChunkRepository:
                 """
                 hybrid_params = [
                     vec_str, vec_str, *hybrid_where_params,
-                    text_clean, text_clean, text_clean,
+                    lexical_query, lexical_query, lexical_query,
                     *([document_id] if document_id else []),
-                    top_k
+                    min(200, max(top_k, top_k * 2))
                 ]
 
                 with self.db.connect() as conn:
@@ -200,8 +243,13 @@ class ChunkRepository:
                             reverse=True,
                         )
                         for row, bm25, score in ranked_rows:
-                            # Chỉ giữ chunk nếu đạt min_similarity hoặc text match có vector similarity hợp lệ
-                            if score >= score_cutoff:
+                            # Preserve every direct lexical hit.  Distribution
+                            # cutoffs are useful for dense-only noise, but can
+                            # incorrectly remove an exact table row (for
+                            # example "Thẻ nội địa Napas") when neighbouring
+                            # rows have stronger vector scores.  The evidence
+                            # reranker performs the final content-level filter.
+                            if score >= score_cutoff or float(row[7] or 0.0) > 0.0:
                                 results.append({
                                     "chunk_id": str(row[0]),
                                     "document_id": str(row[1]),
@@ -237,7 +285,7 @@ class ChunkRepository:
                 c.chunk_index,
                 c.content,
                 c.metadata,
-                d.original_filename,
+                COALESCE(d.display_name, d.original_filename),
                 1 - (c.embedding <=> %s::vector) AS similarity_score
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
@@ -273,7 +321,7 @@ class ChunkRepository:
                     pass
                 # Fallback text search nếu vector extension chưa sẵn sàng
                 fallback_rows = conn.execute("""
-                    SELECT c.id, c.document_id, c.chunk_index, c.content, c.metadata, d.original_filename
+                    SELECT c.id, c.document_id, c.chunk_index, c.content, c.metadata, COALESCE(d.display_name, d.original_filename)
                     FROM document_chunks c
                     JOIN documents d ON c.document_id = d.id
                     LIMIT %s
@@ -313,7 +361,7 @@ class ChunkRepository:
         params.append(top_k)
         sql = f"""
             SELECT c.id, c.document_id, c.chunk_index, c.content, c.metadata,
-                   d.original_filename
+                   COALESCE(d.display_name, d.original_filename)
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
             WHERE {' AND '.join(where)}
@@ -348,7 +396,7 @@ class ChunkRepository:
                 ORDER BY chunk_index ASC
             """, (document_id,)).fetchall()
 
-            return [
+        return [
                 {
                     "id": str(r[0]),
                     "chunk_id": str(r[0]),
@@ -359,3 +407,25 @@ class ChunkRepository:
                 }
                 for r in rows
             ]
+
+    def get_adjacent_chunks(self, document_id: uuid.UUID, chunk_indexes: List[int], radius: int = 1) -> List[Dict[str, Any]]:
+        """Return nearby chunks so a hit on a section heading includes its body."""
+        if not chunk_indexes:
+            return []
+        low = min(chunk_indexes) - radius
+        high = max(chunk_indexes) + radius
+        with self.db.connect() as conn:
+            rows = conn.execute("""
+                SELECT c.id, c.document_id, c.chunk_index, c.content, c.metadata,
+                       COALESCE(d.display_name, d.original_filename)
+                FROM document_chunks c
+                JOIN documents d ON c.document_id = d.id
+                WHERE c.document_id = %s AND c.chunk_index BETWEEN %s AND %s
+                ORDER BY c.chunk_index ASC
+            """, (document_id, low, high)).fetchall()
+        return [{
+            "chunk_id": str(row[0]), "document_id": str(row[1]),
+            "chunk_index": row[2], "content": row[3], "metadata": row[4] or {},
+            "file_name": row[5], "similarity_score": 0.0, "dense_score": 0.0,
+            "bm25_score": 0.0, "retrieval_method": "adjacent_context",
+        } for row in rows]

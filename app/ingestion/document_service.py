@@ -33,7 +33,7 @@ class DocumentService:
             if d[5] == 'processed':
                 progress = 100
             result.append({
-                "id": str(d[0]), "filename": d[1], "content_type": d[2],
+                "id": str(d[0]), "filename": d[1], "original_filename": d[11] if len(d) > 11 else d[1], "content_type": d[2],
                 "size_bytes": d[3], "uploaded_by": d[4], "status": d[5],
                 "created_at": d[6].isoformat() if d[6] else None,
                 "error_message": d[7],
@@ -52,7 +52,7 @@ class DocumentService:
             "total_pages": (count + size - 1) // size
         }
 
-    def process_upload(self, file: UploadFile, actor: str) -> uuid.UUID:
+    def process_upload(self, file: UploadFile, actor: str, display_name: str | None = None) -> uuid.UUID:
         """Process upload."""
         name = file.filename
         if not name:
@@ -85,8 +85,14 @@ class DocumentService:
             
         # Save to DB; remove the object if metadata persistence fails.
         size = file.size or file.file.tell()
+        safe_display_name = (display_name or "").strip() or None
+        if safe_display_name:
+            safe_display_name = " ".join(safe_display_name.replace("\x00", "").split())[:512]
         try:
-            self.repo.create_document(doc_id, name, object_key, content_type=file.content_type, size=size, actor=actor, sha256=sha256_hex)
+            self.repo.create_document(
+                doc_id, name, object_key, content_type=file.content_type, size=size,
+                actor=actor, sha256=sha256_hex, display_name=safe_display_name,
+            )
         except Exception:
             try:
                 self.storage.delete_object(object_key)
@@ -104,7 +110,7 @@ class DocumentService:
         object_key = row[2] # based on SELECT *
         # Mark the job cancelled before removing its row. The worker checks
         # this state between extraction stages and stops cooperatively.
-        if row[5] in ("queued", "processing"):
+        if row[7] in ("queued", "processing"):
             self.repo.update_document_status(
                 doc_id, "cancelled", error_message="Đã hủy do tài liệu bị xóa"
             )

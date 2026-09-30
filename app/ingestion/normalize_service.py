@@ -12,6 +12,12 @@ class NormalizeService:
     _blank_lines = re.compile(r"\n{3,}")
     _image_marker = re.compile(r"<!--\s*image\s*-->", re.IGNORECASE)
     _page_number = re.compile(r"^(?:page|trang)\s+\d{1,4}(?:\s+(?:of|trên)\s+\d{1,4})?$", re.IGNORECASE)
+    _export_chrome = re.compile(
+        r"^(?:đoạn\s*#?\s*\d+|•\s*trang\s*\d+|xem\s+trên\s+pdf|"
+        r"legal_reference|rule_obligation|contact|content|save|"
+        r"[]+)$",
+        re.IGNORECASE,
+    )
 
     def __init__(self):
         self._pipeline = None
@@ -26,7 +32,12 @@ class NormalizeService:
         text = cls._control_chars.sub("", text)
         text = cls._image_marker.sub("\n[IMAGE]\n", text)
         text = re.sub(r"(?<=\w)-\s*\n\s*(?=\w)", "", text, flags=re.UNICODE)
-        lines = [cls._spaces.sub(" ", line).strip() for line in text.splitlines()]
+        lines = []
+        for line in text.splitlines():
+            clean_line = cls._spaces.sub(" ", line).strip()
+            if not clean_line or cls._export_chrome.match(clean_line):
+                continue
+            lines.append(clean_line)
         return cls._blank_lines.sub("\n\n", "\n".join(lines)).strip()
 
     @staticmethod

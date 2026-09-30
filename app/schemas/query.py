@@ -32,6 +32,13 @@ class SourceCitation(BaseModel):
     page_start: Optional[Any] = None
     page_end: Optional[Any] = None
     snippet: Optional[str] = None
+    # Explain why this chunk was selected.  These fields are produced after
+    # hybrid retrieval and are useful for debugging and UI source ranking.
+    query_compatibility_score: Optional[float] = None
+    answerability_score: Optional[float] = None
+    entity_match: Optional[float] = None
+    constraint_match: Optional[float] = None
+    scoped_claims: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class QueryResponse(BaseModel):

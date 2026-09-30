@@ -48,21 +48,48 @@ DOCLING_OCR_LANG = [
     if value.strip()
 ]
 EXTRACTION_TIMEOUT_SECONDS = int(os.getenv("EXTRACTION_TIMEOUT_SECONDS", "1800"))
+# Number of queued documents claimed and processed concurrently by one worker.
+INGESTION_WORKER_CONCURRENCY = max(
+    1, int(os.getenv("INGESTION_WORKER_CONCURRENCY", "2"))
+)
 
 # NVIDIA NIM & Semantic Normalization Configuration
 NGC_API_KEY = (os.getenv("NGC_API_KEY") or os.getenv("NVIDIA_API_KEY") or "").strip()
 NIM_BASE_URL = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1").rstrip("/")
-NIM_MODEL = os.getenv("NIM_MODEL", "meta/llama-3.2-11b-vision-instruct")
+NIM_MODEL = os.getenv("NIM_MODEL", "openai/gpt-oss-20b")
 NIM_CONCURRENCY = int(os.getenv("NIM_CONCURRENCY", "4"))
-NIM_TIMEOUT_SECONDS = int(os.getenv("NIM_TIMEOUT_SECONDS", "120"))
+NIM_TIMEOUT_SECONDS = int(os.getenv("NIM_TIMEOUT_SECONDS", "180"))
+# Semantic normalization is an enrichment step. It must never hold an upload
+# job for several minutes when a hosted model is slow or unavailable.
+NIM_REQUEST_TIMEOUT_SECONDS = max(
+    10,
+    int(os.getenv("NIM_REQUEST_TIMEOUT_SECONDS", "30")),
+)
+NIM_MAX_RETRIES = max(1, int(os.getenv("NIM_MAX_RETRIES", "1")))
+NIM_NORMALIZATION_DEADLINE_SECONDS = max(
+    NIM_REQUEST_TIMEOUT_SECONDS,
+    int(os.getenv("NIM_NORMALIZATION_DEADLINE_SECONDS", "45")),
+)
 NIM_MAX_INPUT_CHARS = int(os.getenv("NIM_MAX_INPUT_CHARS", "16000"))
+NIM_SUPPORTS_MULTIMODAL = os.getenv("NIM_SUPPORTS_MULTIMODAL", "false").lower() == "true"
 ENABLE_NIM_NORMALIZATION = os.getenv("ENABLE_NIM_NORMALIZATION", "false").lower() == "true"
 
-# OCR/semantic routing.  Keep ENABLE_NIM_NORMALIZATION as a backwards-
-# compatible switch, but prefer the provider policy below for new deployments.
+# NVIDIA NeMo Retriever OCR v2.  The hosted endpoint is separate from the
+# OpenAI-compatible chat/embedding endpoint above.
+NVIDIA_OCR_BASE_URL = os.getenv(
+    "NVIDIA_OCR_BASE_URL",
+    "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2",
+).rstrip("/")
+NVIDIA_OCR_MODEL = os.getenv("NVIDIA_OCR_MODEL", "nvidia/nemotron-ocr-v2")
+NVIDIA_OCR_TIMEOUT_SECONDS = int(os.getenv("NVIDIA_OCR_TIMEOUT_SECONDS", "180"))
+NVIDIA_OCR_BATCH_SIZE = max(1, int(os.getenv("NVIDIA_OCR_BATCH_SIZE", "2")))
+NVIDIA_OCR_CONCURRENCY = max(1, int(os.getenv("NVIDIA_OCR_CONCURRENCY", "4")))
+
+# OCR/semantic routing. Keep the old switch for compatibility, but NVIDIA is
+# the default provider for every model-based normalization step.
 SEMANTIC_NORMALIZER = os.getenv(
     "SEMANTIC_NORMALIZER",
-    "nvidia" if ENABLE_NIM_NORMALIZATION else "none",
+    "nvidia",
 ).strip().lower()
 SEMANTIC_NORMALIZE_OCR_ONLY = os.getenv(
     "SEMANTIC_NORMALIZE_OCR_ONLY", "true"
@@ -71,8 +98,8 @@ SEMANTIC_OCR_CONFIDENCE_GATE = float(
     os.getenv("SEMANTIC_OCR_CONFIDENCE_GATE", "0.93")
 )
 
-# Existing PP-OCRv6 service (OpenAPI: POST /v1/ocr).  This project does not own
-# that container; auto routing falls back to Docling/Tesseract when unavailable.
+# Legacy local OCR settings are retained only for explicitly selected legacy
+# adapters. The default auto path uses NVIDIA NeMo Retriever OCR v2.
 LOCAL_OCR_BASE_URL = os.getenv(
     "LOCAL_OCR_BASE_URL", "http://host.docker.internal:8012"
 ).rstrip("/")

@@ -391,9 +391,14 @@ class ExtractService:
             if not row:
                 return
             
-            # row indexes based on SELECT *: 0=id, 1=original_filename, 2=object_key
+            # row indexes based on SELECT *: 0=id, 1=original_filename, 2=object_key;
+            # display_name is appended by the idempotent schema migration.
             original_filename = row[1]
             object_key = row[2]
+            # ``documents`` has legacy columns (including source_path); the
+            # migration appends display_name at the end.  Keep this lookup
+            # explicit so progress/extracted_data are never shown as names.
+            display_name = (row[14] if len(row) > 14 and row[14] else original_filename)
                 
             with tempfile.NamedTemporaryFile(suffix=Path(original_filename).suffix, delete=False) as tmp:
                 tmp_name = tmp.name
@@ -441,16 +446,32 @@ class ExtractService:
                 extraction_complete = True
                 self.repo.update_progress(doc_id, 68, "Đã đọc xong tệp văn bản")
 
-            # Auto mode mirrors the upstream parser guidance: do not OCR a PDF
-            # that already has a usable text layer; use the Vietnamese GPU OCR
-            # service for scans/images; keep DeepDoc opt-in for complex layouts.
-            use_ragflow = DOCUMENT_PARSER_ENGINE == "ragflow"
-            use_tesseract_direct = DOCUMENT_PARSER_ENGINE == "tesseract" or (
-                DOCUMENT_PARSER_ENGINE == "auto"
-                and (source_suffix != ".pdf" or not native_pdf_text)
-                and source_suffix in {".pdf", ".png", ".jpg", ".jpeg"}
+            # Auto mode avoids OCR for a usable native PDF text layer. Scans and
+            # images are routed to NVIDIA NeMo Retriever OCR v2 so every model
+            # based OCR step uses the same hosted NVIDIA provider.
+            needs_nvidia_ocr = (
+                source_suffix in {".png", ".jpg", ".jpeg"}
+                or (source_suffix == ".pdf" and not native_pdf_text)
+                or (source_suffix == ".pdf" and pdf_has_embedded_images)
+                or (
+                    DOCLING_DO_OCR == "true"
+                    and source_suffix in {".pdf", ".png", ".jpg", ".jpeg"}
+                )
             )
-            use_local_ocr = DOCUMENT_PARSER_ENGINE == "ppocr"
+            # RAGFlow/Docling remain available for native-text layout parsing,
+            # but they must not invoke their own OCR engines for scans.
+            use_ragflow = DOCUMENT_PARSER_ENGINE == "ragflow" and not needs_nvidia_ocr
+            use_nvidia_ocr = DOCUMENT_PARSER_ENGINE in {
+                "nvidia",
+                "nvidia_ocr",
+                # Keep old values as aliases so an existing .env cannot
+                # silently send OCR back to a local model.
+                "tesseract",
+                "ppocr",
+            } or (
+                DOCUMENT_PARSER_ENGINE in {"auto", "docling", "ragflow"}
+                and needs_nvidia_ocr
+            )
 
             if use_ragflow:
                 try:
@@ -475,67 +496,45 @@ class ExtractService:
                     print(f"[{doc_id}] ragflow extraction unavailable ({rf_err}), falling back to Docling OCR", flush=True)
                     extraction_complete = False
 
-            if use_tesseract_direct and not extraction_complete:
+            if use_nvidia_ocr and not extraction_complete:
                 try:
-                    from app.ingestion.tesseract_extractor import TesseractExtractor
+                    from app.ingestion.nvidia_ocr_extractor import NvidiaOcrExtractor
 
-                    print(f"[{doc_id}] stage=tesseract_direct_start", flush=True)
-                    self.repo.update_progress(doc_id, 15, 'OCR tiếng Việt theo trang')
-                    tesseract_result = TesseractExtractor().extract(tmp_name, original_filename)
-                    clean_text = tesseract_result["clean_text"]
-                    normalized_elements = tesseract_result["normalized_elements"]
-                    ocr_bboxes = tesseract_result["ocr_bboxes"]
-                    image_bboxes = tesseract_result["image_bboxes"]
-                    doc_json = tesseract_result["doc_json"]
-                    page_count = tesseract_result["page_count"]
-                    ocr_confidence = tesseract_result.get("confidence")
+                    print(f"[{doc_id}] stage=nvidia_ocr_start", flush=True)
+                    self.repo.update_progress(doc_id, 15, 'OCR bằng NVIDIA NeMo Retriever')
+                    nvidia_result = NvidiaOcrExtractor().extract(tmp_name, original_filename)
+                    clean_text = nvidia_result["clean_text"]
+                    normalized_elements = nvidia_result["normalized_elements"]
+                    ocr_bboxes = nvidia_result["ocr_bboxes"]
+                    image_bboxes = nvidia_result["image_bboxes"]
+                    doc_json = nvidia_result["doc_json"]
+                    page_count = nvidia_result["page_count"]
+                    ocr_confidence = nvidia_result.get("confidence")
                     do_ocr = True
-                    parser_used = "tesseract_direct"
+                    parser_used = "nvidia_nemotron_ocr_v2"
                     extraction_complete = True
                     print(
-                        f"[{doc_id}] stage=tesseract_direct_done pages={page_count} "
+                        f"[{doc_id}] stage=nvidia_ocr_done pages={page_count} "
                         f"chars={len(clean_text)} elements={len(normalized_elements)}",
                         flush=True,
                     )
-                    self.repo.update_progress(doc_id, 68, 'Hoàn tất OCR tiếng Việt')
-                except Exception as tess_err:
+                    self.repo.update_progress(doc_id, 68, 'Hoàn tất OCR bằng NVIDIA')
+                except Exception as nvidia_ocr_err:
                     print(
-                        f"[{doc_id}] direct Tesseract unavailable ({tess_err}), "
-                        "trying local PP-OCRv6",
+                        f"[{doc_id}] NVIDIA OCR unavailable ({nvidia_ocr_err})",
                         flush=True,
                     )
-                    use_local_ocr = True
-
-            if use_local_ocr and not extraction_complete:
-                try:
-                    from app.ingestion.ppocr_extractor import PpOcrExtractor
-
-                    print(f"[{doc_id}] stage=ppocr_extract_start", flush=True)
-                    self.repo.update_progress(doc_id, 15, 'OCR tiếng Việt bằng GPU local')
-                    ppocr_result = PpOcrExtractor().extract(tmp_name, original_filename)
-                    clean_text = ppocr_result["clean_text"]
-                    normalized_elements = ppocr_result["normalized_elements"]
-                    ocr_bboxes = ppocr_result["ocr_bboxes"]
-                    image_bboxes = ppocr_result["image_bboxes"]
-                    doc_json = ppocr_result["doc_json"]
-                    page_count = ppocr_result["page_count"]
-                    ocr_confidence = ppocr_result.get("confidence")
-                    do_ocr = True
-                    parser_used = "local_ppocrv6"
-                    extraction_complete = True
-                    print(
-                        f"[{doc_id}] stage=ppocr_extract_done pages={page_count} "
-                        f"chars={len(clean_text)} elements={len(normalized_elements)}",
-                        flush=True,
-                    )
-                    self.repo.update_progress(doc_id, 68, 'Hoàn tất OCR tiếng Việt')
-                except Exception as ppocr_err:
-                    print(
-                        f"[{doc_id}] local PP-OCRv6 unavailable ({ppocr_err}), "
-                        "falling back to Docling/Tesseract",
-                        flush=True,
-                    )
-                    extraction_complete = False
+                    # Do not silently switch to Tesseract/PP-OCR: that would
+                    # violate the provider policy and make benchmark results
+                    # depend on whichever local binary happens to be present.
+                    if DOCUMENT_PARSER_ENGINE in {
+                        "auto", "nvidia", "nvidia_ocr", "tesseract", "ppocr",
+                        "docling", "ragflow",
+                    }:
+                        raise RuntimeError(
+                            "NVIDIA OCR is required for scanned documents; "
+                            f"provider error: {nvidia_ocr_err}"
+                        ) from nvidia_ocr_err
 
             if not extraction_complete:
                 # Đếm trước tổng số trang nếu là PDF
@@ -619,7 +618,7 @@ class ExtractService:
                 SEMANTIC_NORMALIZER not in {"none", "off", "false"}
                 and (do_ocr or not SEMANTIC_NORMALIZE_OCR_ONLY)
                 and not (
-                    parser_used == "tesseract_direct"
+                    parser_used in {"tesseract_direct", "nvidia_nemotron_ocr_v2"}
                     and ocr_confidence is not None
                     and ocr_confidence >= SEMANTIC_OCR_CONFIDENCE_GATE
                 )
@@ -667,7 +666,7 @@ class ExtractService:
                 if not do_ocr:
                     reason = "native_text_fast_path"
                 elif (
-                    parser_used == "tesseract_direct"
+                    parser_used in {"tesseract_direct", "nvidia_nemotron_ocr_v2"}
                     and ocr_confidence is not None
                     and ocr_confidence >= SEMANTIC_OCR_CONFIDENCE_GATE
                 ):
@@ -687,8 +686,8 @@ class ExtractService:
             # chunks, while ``file_name`` is the canonical public key.
             doc_meta = {
                 "document_id": str(doc_id),
-                "file_name": original_filename,
-                "filename": original_filename,
+                "file_name": display_name,
+                "filename": display_name,
                 "embedding_model": self._embedder.model or EMBEDDING_MODEL,
             }
             if normalized_elements:
@@ -748,8 +747,8 @@ class ExtractService:
                             **chunk_meta,
                             "document_id": str(doc_id),
                             "chunk_id": str(chunk_id),
-                            "file_name": original_filename,
-                            "filename": original_filename,
+                            "file_name": display_name,
+                            "filename": display_name,
                             "embedding_model": self._embedder.model or EMBEDDING_MODEL,
                             # Semantic chunker fields (may already be in chunk_meta)
                             "chunk_type": chunk_meta.get("chunk_type", "content"),
@@ -762,9 +761,9 @@ class ExtractService:
                                 if ocr_confidence is not None else None
                             ),
                             "source_locator": (
-                                f"{original_filename}#page={chunk_meta.get('page_start')}"
+                                f"{display_name}#page={chunk_meta.get('page_start')}"
                                 if chunk_meta.get("page_start") is not None
-                                else original_filename
+                                else display_name
                             ),
                         },
                         "embedding": vec,

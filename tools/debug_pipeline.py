@@ -90,6 +90,7 @@ def stage_config():
         DOCLING_DEVICE, DOCLING_NUM_THREADS, DOCLING_FORCE_FULL_PAGE_OCR,
         HF_TOKEN,
         DOCUMENT_PARSER_ENGINE, RAGFLOW_MODE,
+        NVIDIA_OCR_BASE_URL, NVIDIA_OCR_MODEL,
     )
     masked_key = NGC_API_KEY[:8] + "..." + NGC_API_KEY[-4:] if NGC_API_KEY else "❌ EMPTY"
     masked_hf = HF_TOKEN[:6] + "..." + HF_TOKEN[-4:] if HF_TOKEN else "❌ EMPTY"
@@ -100,6 +101,8 @@ def stage_config():
     info("NGC_API_KEY",       masked_key)
     info("HF_TOKEN",          masked_hf)
     info("NIM Model",         NIM_MODEL)
+    info("NVIDIA OCR Model",   NVIDIA_OCR_MODEL)
+    info("NVIDIA OCR Endpoint", NVIDIA_OCR_BASE_URL)
     info("NIM Concurrency",   str(NIM_CONCURRENCY))
     if DOCUMENT_PARSER_ENGINE == "docling":
         info("Docling OCR Engine", DOCLING_OCR_ENGINE)
@@ -263,6 +266,30 @@ def stage_ragflow(pdf_path: str):
         result, do_ocr, elapsed = stage_docling(pdf_path)
         clean_text, normalized_elements, image_bboxes, ocr_bboxes, doc_json = stage_clean(result, pdf_path)
 
+    return clean_text, normalized_elements, image_bboxes, ocr_bboxes, doc_json, elapsed
+
+
+# ─── STAGE 1 (NVIDIA OCR): NeMo Retriever OCR v2 ─────────────────────────────
+def stage_nvidia_ocr(pdf_path: str):
+    """Run the same NVIDIA OCR adapter used by the background worker."""
+    header("STAGE 1 — NVIDIA NeMo Retriever OCR v2")
+    step("🚀", "Gửi ảnh theo trang tới NVIDIA OCR NIM")
+    from app.ingestion.nvidia_ocr_extractor import NvidiaOcrExtractor
+
+    t0 = time.time()
+    result = NvidiaOcrExtractor().extract(pdf_path, Path(pdf_path).name)
+    elapsed = time.time() - t0
+    clean_text = result["clean_text"]
+    normalized_elements = result["normalized_elements"]
+    image_bboxes = result["image_bboxes"]
+    ocr_bboxes = result["ocr_bboxes"]
+    doc_json = result["doc_json"]
+    ok(
+        "NVIDIA OCR xử lý xong",
+        f"{result['page_count']} trang | {len(normalized_elements)} elements | {elapsed:.1f}s",
+    )
+    info("Mô hình", doc_json.get("model", "nvidia/nemotron-ocr-v2"))
+    info("Confidence trung bình", str(result.get("confidence")))
     return clean_text, normalized_elements, image_bboxes, ocr_bboxes, doc_json, elapsed
 
 
@@ -628,6 +655,9 @@ def main():
 
     if DOCUMENT_PARSER_ENGINE == "ragflow":
         clean_text, normalized_elements, image_bboxes, ocr_bboxes, doc_json, elapsed_extract = stage_ragflow(pdf_path)
+        do_ocr = True
+    elif not _pdf_has_text(pdf_path):
+        clean_text, normalized_elements, image_bboxes, ocr_bboxes, doc_json, elapsed_extract = stage_nvidia_ocr(pdf_path)
         do_ocr = True
     else:
         result, do_ocr, elapsed_extract = stage_docling(pdf_path)
