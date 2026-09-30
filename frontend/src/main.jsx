@@ -992,39 +992,62 @@ export default function App() {
           if (copy[idx]?.role === 'assistant') copy[idx] = { ...copy[idx], text: answerText, sources, retrieved_chunks: chunks, searchQuery: query, ...extra }
           return copy
         })
+        const processStreamEvent = (event) => {
+          const line = event.split('\n').find(x => x.startsWith('data:'))
+          if (!line) return
+          const raw = line.slice(5).trim()
+          if (!raw || raw === '[DONE]') return
+          try {
+            const item = JSON.parse(raw)
+            if (item.type === 'token') { answerText += item.text || ''; updateAssistant() }
+            if (item.type === 'metadata') {
+              sources = item.sources || []
+              chunks = item.retrieved_chunks || []
+              setChatActiveSources(sources)
+              setChatActiveChunks(chunks)
+              const first = sources[0]
+              if (first) {
+                setChatActiveDocId(resolveDocId(first.document_id || first.file_name))
+                setChatActiveDocName(first.file_name || '')
+              }
+              updateAssistant()
+            }
+            if (item.type === 'error') { answerText = item.message || 'Không thể xử lý truy vấn RAG lúc này.'; updateAssistant() }
+          } catch (_) {}
+        }
         while (true) {
           const { value, done } = await reader.read()
           if (done) break
           buffer += decoder.decode(value, { stream: true })
           const events = buffer.split('\n\n')
           buffer = events.pop() || ''
-          for (const event of events) {
-            const line = event.split('\n').find(x => x.startsWith('data:'))
-            if (!line) continue
-            const raw = line.slice(5).trim()
-            if (raw === '[DONE]') continue
-            try {
-              const item = JSON.parse(raw)
-              if (item.type === 'token') { answerText += item.text || ''; updateAssistant() }
-              if (item.type === 'metadata') {
-                sources = item.sources || []
-                chunks = item.retrieved_chunks || []
-                setChatActiveSources(sources)
-                setChatActiveChunks(chunks)
-                const first = sources[0]
-                if (first) {
-                  setChatActiveDocId(resolveDocId(first.document_id || first.file_name))
-                  setChatActiveDocName(first.file_name || '')
-                }
+          events.forEach(processStreamEvent)
+        }
+        // Some proxies close the stream without appending the final blank line.
+        // Parse the remaining event before deciding that the answer is empty.
+        buffer += decoder.decode()
+        if (buffer.trim()) processStreamEvent(buffer)
+
+        // The backend persists the assistant message before sending metadata.
+        // Recover it once before showing an empty-response warning.
+        if (!answerText.trim() && targetConvId) {
+          try {
+            const savedRes = await fetch(`/api/conversations/${targetConvId}`)
+            if (savedRes.ok) {
+              const saved = await savedRes.json()
+              const persisted = [...(saved.messages || [])].reverse().find(message => message.role === 'assistant' && message.content)
+              if (persisted) {
+                answerText = persisted.content
+                sources = persisted.sources || sources
+                chunks = persisted.retrieved_chunks || chunks
                 updateAssistant()
               }
-              if (item.type === 'error') { answerText = item.message || 'Không thể xử lý truy vấn RAG lúc này.'; updateAssistant() }
-            } catch (_) {}
-          }
+            }
+          } catch (_) {}
         }
         // A completed stream must not leave an empty assistant bubble when
         // metadata arrived successfully. The backend retries non-stream mode,
-        // but keep a visible fallback for an interrupted proxy/UI stream.
+        // but keep a visible fallback for a genuinely empty response.
         if (!answerText.trim()) {
           answerText = sources.length
             ? 'Đã tìm thấy tài liệu liên quan nhưng chưa nhận được phần trả lời từ mô hình. Vui lòng gửi lại câu hỏi.'
