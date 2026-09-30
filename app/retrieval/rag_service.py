@@ -102,7 +102,7 @@ def _extract_time_context(question: str) -> str:
         rule_hint = "áp dụng mức phí tháng thứ 1 (tháng đầu tiên kể từ ngày mua)"
     elif 2 <= month_number <= 12:
         label = f"tháng thứ {month_number}"
-        rule_hint = f"áp dụng mức phí tháng thứ 2–12 (vì đã qua tháng đầu tiên)"
+        rule_hint = "áp dụng mức phí tháng thứ 2–12 (vì đã qua tháng đầu tiên)"
     else:
         label = f"tháng thứ {month_number}"
         rule_hint = "đã vượt quá 12 tháng — kiểm tra xem chính sách còn áp dụng không"
@@ -143,6 +143,8 @@ _CHITCHAT_RE = re.compile(
 
 
 class RagService:
+    """Coordinate retrieval, evidence filtering, and grounded answer generation."""
+
     @staticmethod
     def _clean_extracted_noise(value: str) -> str:
         """Remove repeated OCR/export chrome while preserving factual text."""
@@ -346,7 +348,9 @@ class RagService:
         parts = re.split(r"\n\s*\n", answer.strip(), maxsplit=1)
         if len(parts) < 2:
             return answer.strip()
-        normalize = lambda value: re.sub(r"[^\wÀ-ỹ]+", "", value.lower())
+        def normalize(value: str) -> str:
+            """Normalize text for detecting a repeated question paragraph."""
+            return re.sub(r"[^\wÀ-ỹ]+", "", value.lower())
         first, qnorm = normalize(parts[0]), normalize(question)
         lead_markers = (
             "tôi hiểu rằng", "bạn đang hỏi", "câu hỏi của bạn", "theo câu hỏi của bạn",
@@ -736,24 +740,39 @@ class RagService:
             if topic_matched:
                 matched_chunks = topic_matched
 
-        # Hard document identity gate.  Once a distinctive product/brand is
-        # present (for example ``Adore`` or ``Shopee``), all selected chunks
-        # must come from documents that contain that identity.  This keeps
-        # supporting chunks from the same document, while preventing a weak
-        # "bảo hành/đổi trả" hit from another brand from appearing in sources.
-        distinctive_terms = [
-            token for token in q_tokens
-            if len(token) >= 4 and token not in _GENERIC_TOPIC_TERMS
-        ]
-        if distinctive_terms and matched_chunks:
+        # Hard document identity gate.  A query often contains ordinary words
+        # such as ``theo`` or ``đầu`` that occur in many policies.  They must
+        # not be treated as a brand/entity anchor.  Estimate document
+        # frequency over the retrieved candidate pool and keep only rare query
+        # terms as identity signals.  For the Adore query, ``adore`` occurs in
+        # one document while generic warranty words occur in several, so all
+        # NLMT chunks are removed while supporting ADORE chunks are retained.
+        if matched_chunks and reranked_chunks:
+            candidate_by_document: dict[str, list[Dict[str, Any]]] = {}
+            for chunk in reranked_chunks:
+                doc_id = str(chunk.get("document_id") or "")
+                if doc_id:
+                    candidate_by_document.setdefault(doc_id, []).append(chunk)
+            document_count = len(candidate_by_document)
+            max_identity_document_frequency = max(1, (document_count + 2) // 3)
+            term_documents: dict[str, set[str]] = {}
+            for token in q_tokens:
+                if len(token) < 4 or token in _GENERIC_TOPIC_TERMS:
+                    continue
+                for doc_id, doc_chunks in candidate_by_document.items():
+                    haystack = " ".join(
+                        str(item.get("content") or "") + " "
+                        + str(item.get("original_filename") or item.get("file_name") or "")
+                        for item in doc_chunks
+                    ).casefold()
+                    if token in haystack:
+                        term_documents.setdefault(token, set()).add(doc_id)
+            identity_terms = [
+                term for term, docs in term_documents.items()
+                if docs and len(docs) <= max_identity_document_frequency
+            ]
             identity_document_ids = {
-                str(chunk.get("document_id"))
-                for chunk in reranked_chunks
-                if chunk.get("document_id")
-                and any(
-                    term in str(chunk.get("content") or "").casefold()
-                    for term in distinctive_terms
-                )
+                doc_id for term in identity_terms for doc_id in term_documents[term]
             }
             if identity_document_ids:
                 matched_chunks = [

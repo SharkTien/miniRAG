@@ -26,6 +26,7 @@ logger = logging.getLogger("query_router")
 
 @router.post("/query/stream", summary="Stream a grounded answer")
 def stream_query(payload: QueryRequest, conversation_id: str | None = None, rag_service: RagService = Depends(get_rag_service), repo: ConversationRepository = Depends(get_conversation_repo)):
+    """Stream grounded answer tokens and retrieval metadata to the client."""
     if not payload.question or not payload.question.strip():
         raise HTTPException(status_code=400, detail={"code": "question_required"})
     events: queue.Queue = queue.Queue()

@@ -97,6 +97,7 @@ class QueryPlan:
     comparison: bool
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the query plan as a JSON-serializable dictionary."""
         return asdict(self)
 
 
@@ -104,6 +105,7 @@ class QueryPlanner:
     """Classify a query and produce safe retrieval variants."""
 
     def plan(self, question: str) -> QueryPlan:
+        """Classify a question and generate bounded retrieval variants."""
         original = _fold(question)
         normalized = _POLITE_PREFIX.sub("", original)
         normalized = _QUESTION_TAIL.sub("", normalized)
