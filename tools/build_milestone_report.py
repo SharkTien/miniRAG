@@ -384,18 +384,21 @@ def build():
     def bullet(text):
         story.append(Paragraph("• " + escape(text), styles["BulletVi"]))
 
-    h1("1. Tóm tắt điều hành")
-    body("Báo cáo đối chiếu hệ thống với bốn mốc triển khai. Trọng tâm là nghiên cứu dữ liệu: phân loại nội dung, kiểm tra chất lượng sau trích xuất và nhận dạng ký tự, đánh giá theo loại dữ liệu và truy vết quyết định đưa vào hệ thống.")
-    body("Trên bộ 5 PDF SynthDocQA với 877 câu hỏi, cấu hình tốt nhất tìm đúng tài liệu 90,65%, tìm đúng nội dung 41,33% và đạt đúng mệnh đề 23,72%. Đây là số liệu của bộ đánh giá chuyên biệt, không phải cam kết cho mọi tài liệu thực tế.")
-    story.append(rich("Điểm cần xem trong báo cáo: dữ liệu được khảo sát trước khi chọn cách xử lý; lỗi trích xuất, lỗi lập chỉ mục và lỗi truy xuất được tách riêng; kết quả theo bảng, biểu mẫu, hình, chú thích và văn bản được dùng để thay đổi luồng xử lý.", styles["Callout"]))
-
-    h1("2. Sơ đồ luồng dữ liệu")
-    story.append(pipeline_diagram(regular))
-    body("Khi tải tài liệu, hệ thống lưu file gốc, trích xuất bố cục, nhận dạng phần chữ trên bản quét, làm sạch và chia thành các đoạn có nguồn gốc. Mỗi đoạn được tạo vector và lưu cùng metadata trong PostgreSQL. Khi đặt câu hỏi, hệ thống kết hợp tìm kiếm từ khóa và vector, lọc bằng chứng rồi mới gửi phần ngữ cảnh đã chọn tới mô hình sinh.")
-
     h1("3. Các mốc thực hiện")
     h2("Mốc 1 — Luồng dữ liệu")
     body("Đã hoàn thành tải tài liệu, kiểm tra định dạng, lưu kho đối tượng, trích xuất PDF/TXT/DOCX và định dạng mở rộng, nhận dạng ký tự NVIDIA cho bản quét và ảnh, làm sạch, chuẩn hóa ngữ nghĩa có giới hạn thời gian, chia đoạn, tạo vector theo lô, lưu pgvector và xử lý nền.")
+    story.append(pipeline_diagram(regular))
+    body("Sơ đồ trên là luồng xử lý dữ liệu cuối cùng: tài liệu được trích xuất trước, làm sạch và chia đoạn theo cấu trúc, sau đó mới tạo vector và lưu cùng metadata. Khi hỏi, hệ thống dùng đồng thời điểm từ khóa và điểm ngữ nghĩa, lọc theo tài liệu, xếp hạng bằng chứng rồi mới gửi ngữ cảnh phù hợp cho mô hình trả lời.")
+    h3 = lambda text: story.append(Paragraph(escape(text), styles["ReportH3"]))
+    h3("Các mô hình và vai trò trong luồng")
+    story.append(table([
+        ["Thành phần", "Mô hình/công nghệ", "Vai trò"],
+        ["Nhận dạng ký tự", "NVIDIA NeMo Retriever OCR v2", "Đọc chữ trong PDF quét, ảnh và vùng bảng khi tài liệu không có lớp chữ."],
+        ["Tạo vector", "NVIDIA NeMo Retriever Embed 1B", "Biến câu hỏi và từng đoạn thành vector cùng không gian để tìm kiếm ngữ nghĩa."],
+        ["Chuẩn hóa ngữ nghĩa", "Mô hình ngôn ngữ qua NVIDIA NIM", "Chuẩn hóa tiêu đề, quan hệ bảng và tín hiệu truy vấn khi cần; có giới hạn thời gian và thử lại."],
+        ["Sinh câu trả lời", "Mô hình ngôn ngữ qua NVIDIA NIM", "Tổng hợp câu trả lời chỉ từ các bằng chứng đã được chọn và trả kèm nguồn."],
+        ["Lưu trữ và tìm kiếm", "PostgreSQL + pgvector + toàn văn", "Lưu vector/metadata và kết hợp tìm kiếm ngữ nghĩa với từ khóa."],
+    ], [38 * mm, 57 * mm, 83 * mm], regular, small=True))
     bullet("Hồ sơ nghiên cứu dữ liệu được bàn giao kèm báo cáo và dùng làm căn cứ cho các quyết định kỹ thuật.")
     bullet("877 câu hỏi được phân loại theo bảng, biểu mẫu, hình, chú thích và văn bản.")
     bullet("Các phương án OCR, mở rộng tập ứng viên, tìm kiếm kết hợp, xử lý bảng, hình và chú thích được chạy trên cùng bộ câu hỏi.")
@@ -414,7 +417,7 @@ def build():
     story.append(evidence_image(ROOT / "output/images/chunk.png", "Hình 4. Màn hình xem chunk: nội dung được chia thành các đoạn có thứ tự, giữ tiêu đề, trang và văn bản liên quan để bước truy xuất có thể chọn đúng phần.", regular, width=130 * mm))
 
     h1("5. Nghiên cứu và xử lý dữ liệu")
-    h2("3.1 Hồ sơ dữ liệu")
+    h2("5.1 Hồ sơ dữ liệu")
     body("Benchmark gồm 877 câu hỏi trên 5 PDF. Bảng chiếm 299 câu, biểu mẫu 107, hình 159, chú thích/đánh dấu 285 và văn bản thường 27. Việc phân loại giúp không dùng một chiến lược chunk/OCR cho mọi loại nội dung.")
     story.append(table([
         ["Loại dữ liệu", "Số câu", "Rủi ro cần kiểm soát"],
@@ -424,12 +427,12 @@ def build():
         ["Chú thích", "285", "Callout, tô màu, vùng đánh dấu"],
         ["Văn bản", "27", "Header/footer và chunk quá ngắn"],
     ], [35 * mm, 20 * mm, 105 * mm], regular, small=True))
-    h2("3.2 Thiết kế phép đo")
+    h2("5.2 Thiết kế phép đo")
     bullet("Document hit: tài liệu đúng xuất hiện trong kết quả.")
     bullet("Content hit: kết quả có đoạn chứa dữ kiện trả lời.")
     bullet("Assertion pass: câu trả lời đúng mệnh đề được kiểm tra.")
     body("Ba chỉ số được đọc cùng nhau. Document hit cao nhưng content hit thấp nghĩa là hệ thống biết tên tài liệu nhưng chưa tìm được bằng chứng; content hit có nhưng assertion pass thấp chỉ ra vấn đề ở bước tổng hợp hoặc diễn đạt.")
-    h2("3.3 So sánh phương án")
+    h2("5.3 So sánh phương án")
     story.append(table([
         ["Phương án", "Kết quả", "Quyết định"],
         ["Ban đầu", "85,52% document; 33,52% content; 18,59% pass", "Mốc"],
@@ -440,7 +443,7 @@ def build():
         ["Visual element + region OCR", "Figure 34/159 hit; 19/159 pass", "Giữ cho hình"],
         ["OCR tile cố định", "Annotation 92/285 hit, thấp hơn tuyến ngữ cảnh", "Loại"],
     ], [53 * mm, 72 * mm, 35 * mm], regular, small=True))
-    h2("3.4 Quyết định kỹ thuật từ dữ liệu")
+    h2("5.4 Quyết định kỹ thuật từ dữ liệu")
     bullet("Tài liệu quét: OCR toàn trang NVIDIA có timeout và fallback để không treo job.")
     bullet("Bảng: giữ quan hệ tiêu đề–hàng–cột, thêm chunk cha và điều hướng theo câu hỏi.")
     bullet("Hình: lưu crop, page, bbox và metadata; benchmark cho thấy chỉ mục phần tử riêng tốt hơn gắn ảnh vào chunk trang.")
@@ -449,15 +452,18 @@ def build():
 
     h1("6. Kiểm thử đơn vị và kiểm thử API")
     body("Lệnh kiểm tra chính là ruff check app tests, python -m compileall -q app tests và python -m pytest -q tests. Kết quả gần nhất: 22 kiểm thử đạt; kiểm thử gọi dịch vụ NVIDIA trực tiếp được bỏ qua khi môi trường không có khóa API, còn các kiểm thử ngoại tuyến vẫn chạy bình thường.")
-    story.append(table([
-        ["Tệp kiểm thử", "Nội dung kiểm tra", "Bằng chứng"],
-        ["Thành phần lõi", "Cấu hình, làm sạch ký tự, chia đoạn giữ trang/phần, chuẩn hóa hộp giới hạn", "4 kiểm thử"],
-        ["Hợp đồng API", "Đường dẫn sức khỏe, hỏi đáp có nguồn, câu hỏi rỗng, không có bằng chứng, định dạng tệp và trạng thái chờ", "6 kiểm thử"],
-        ["Xếp hạng bằng chứng", "Loại đoạn chỉ giống chủ đề, giữ đoạn đủ dữ kiện và bảo đảm tên tệp không làm đổi điểm nội dung", "3 kiểm thử"],
-        ["Định tuyến nhận dạng ký tự", "Đường tắt PDF có lớp chữ, sửa dấu tiếng Việt, chống mở rộng bịa đặt, giữ hộp giới hạn và chính sách nhà cung cấp", "5 kiểm thử"],
-        ["Kết nối mô hình NVIDIA", "Đọc cấu hình, chia trang, kiểm tra chống bịa đặt; gọi NVIDIA trực tiếp là phần tùy chọn", "3 kiểm thử ngoại tuyến + 1 tùy chọn"],
-        ["Kiểm chứng truy xuất", "Bộ kiểm tra truy xuất cục bộ và tạo vector phục vụ kiểm chứng thủ công", "Tập kiểm tra bổ sung"],
-    ], [42 * mm, 100 * mm, 34 * mm], regular, small=True))
+    h2("6.1 Kiểm thử thành phần lõi")
+    body("Mục tiêu: bảo đảm dữ liệu đầu vào được làm sạch và chia đúng trước khi tạo vector. Mẫu kiểm tra: chuỗi có khoảng trắng thừa, ba dòng xuống dòng liên tiếp và một ký tự điều khiển phải trở thành một dòng trống đúng chuẩn; đoạn văn có số trang và tiêu đề phải giữ lại trang/phần; hộp giới hạn phải được chuẩn hóa về cùng hệ tọa độ. Nếu một ký tự điều khiển làm thay đổi nội dung hoặc mất số trang, kiểm thử thất bại.")
+    h2("6.2 Kiểm thử hợp đồng API")
+    body("Mục tiêu: xác nhận dịch vụ phản hồi đúng khi người dùng gọi API. Mẫu kiểm tra trạng thái hoạt động: gửi GET /health và yêu cầu mã phản hồi thành công cùng trạng thái dịch vụ cơ sở dữ liệu. Mẫu hỏi đáp: gửi POST /query với câu hỏi hợp lệ và kiểm tra có câu trả lời cùng nguồn. Mẫu lỗi: câu hỏi rỗng phải trả lỗi 400; tệp ngoài PDF/TXT/DOCX phải bị từ chối; tệp hợp lệ phải trả trạng thái queued và mã tài liệu; truy vấn không có bằng chứng phải trả sources rỗng, không dựng nguồn giả.")
+    h2("6.3 Kiểm thử xếp hạng bằng chứng")
+    body("Mục tiêu: đoạn chứa dữ kiện quyết định phải đứng trên đoạn chỉ trùng chủ đề. Mẫu kiểm tra: với câu hỏi về thời gian hoàn tiền thẻ NAPAS, đoạn có “2–5 ngày làm việc” phải vượt đoạn chỉ nói thời hạn trả hàng; đổi tên tệp nhưng giữ nguyên nội dung không được làm thay đổi điểm nội dung. Kiểm thử cũng xác nhận đoạn Kamereo, Microsoft hoặc chính sách bảo hành khác không lọt vào khi câu hỏi chỉ hỏi Shopee.")
+    h2("6.4 Kiểm thử nhận dạng ký tự và định tuyến")
+    body("Mục tiêu: chọn đúng cách đọc theo loại tài liệu. Mẫu kiểm tra: PDF đã có lớp chữ phải đi đường tắt, PDF quét phải chuyển sang OCR NVIDIA, dấu tiếng Việt phải được sửa khi OCR trả ký tự lỗi, vùng bảng phải giữ hộp giới hạn và hệ thống phải dừng đúng thời gian khi mô hình OCR chậm. Văn bản sau OCR phải được đánh dấu phương pháp trích xuất và độ tin cậy để có thể kiểm tra lại.")
+    h2("6.5 Kiểm thử kết nối mô hình NVIDIA")
+    body("Mục tiêu: kiểm tra cấu hình, chia lô và khả năng thử lại mà không bắt buộc gọi dịch vụ trực tuyến trong mọi lần chạy. Mẫu kiểm tra: đọc đúng mô hình, chia trang thành các lô có kích thước giới hạn, giữ thứ tự trang sau khi xử lý song song, và từ chối câu trả lời không có bằng chứng. Khi thiếu khóa truy cập, phần gọi trực tuyến được bỏ qua có chủ đích; các kiểm thử ngoại tuyến vẫn phải đạt.")
+    h2("6.6 Kiểm chứng truy xuất")
+    body("Mục tiêu: kiểm tra độc lập việc tạo vector và tìm đúng đoạn. Mẫu kiểm tra gồm các câu hỏi về thời hạn hoàn tiền, phí trả hàng, chính sách bảo hành, hotline và xử lý hàng lỗi; mỗi câu lưu lại tài liệu mong đợi, tài liệu nhận được, câu trả lời mong đợi và câu trả lời thực tế để đánh giá ở mục 8.")
     body("Kiểm thử API dùng dịch vụ giả lập để kiểm tra hợp đồng phản hồi: câu trả lời phải đi kèm sources; câu hỏi rỗng phải bị từ chối; truy vấn không có bằng chứng không được sinh nguồn giả; file không hỗ trợ phải trả lỗi; upload hợp lệ phải trả trạng thái queued.")
 
     h1("7. Cấu hình và nguồn sự thật")
@@ -476,22 +482,22 @@ def build():
     h1("8. Đánh giá từng trường hợp kiểm tra truy xuất")
     body("Bảng kiểm tra truy xuất có 8 câu hỏi có dữ liệu; hai dòng cuối để trống nên không được tính là trường hợp kiểm tra. Cách đánh giá: Đạt khi câu trả lời chứa đủ ý chính và không mâu thuẫn; Đạt một phần khi có ý chính nhưng thiếu điều kiện hoặc thêm thông tin chưa có căn cứ; Chưa đạt khi mâu thuẫn với đáp án hoặc bỏ sót dữ kiện quyết định.")
     retrieval_cases = [
-        ("1. Hoàn tiền bằng thẻ NAPAS", "Đạt một phần", "Đã trả đúng mốc 2–5 ngày làm việc và đúng phương thức hoàn về thẻ NAPAS. Còn thiếu điều kiện mốc tính từ lúc Shopee xác nhận đã hoàn tiền và phần minh họa ngày làm việc."),
-        ("2. Shop giao sai hàng và phí trả hàng", "Đạt", "Đã phân biệt lấy tại nhà, gửi tại bưu cục và tự sắp xếp; nêu điều kiện chấp nhận và mã vận đơn. Đây là câu trả lời đáp ứng các ý chính trong đáp án kiểm tra."),
-        ("3. Đổi riêng áo lỗi trong một bộ", "Chưa đạt", "Câu trả lời khẳng định được gửi riêng áo và hoàn tiền toàn bộ, trong khi bằng chứng không đủ để kết luận có tách bộ hay không. Đây là lỗi suy diễn vượt nguồn."),
-        ("4. Phụ kiện Adore có được đổi không", "Chưa đạt", "Câu trả lời khẳng định chắc chắn được đổi trong 7 ngày, trong khi đáp án yêu cầu nêu rõ phần chính sách cung cấp chưa xác định được trường hợp phụ kiện. Đây là lỗi trộn bảo hành với đổi hàng."),
-        ("5. Bảo hành biến tần GD100-PV", "Đạt một phần", "Đã nêu đúng thời hạn 1,5 năm và mốc tính từ ngày giao hàng. Phần điều kiện, địa điểm và mô tả phụ thêm không có căn cứ nên cần loại bỏ khi trả lời người dùng."),
-        ("6. Inverter gửi tới Nguyễn Văn Quá", "Chưa đạt", "Chưa trả đúng thời gian 24 giờ làm việc, chưa nêu quy trình báo giá khi máy nứt vỡ và chỉ trả một phần thông tin cước. Đây là thiếu dữ kiện quyết định."),
-        ("7. Hotline khiếu nại Kamereo", "Đạt một phần", "Đã trả đúng số 0812 46 37 27. Các mốc 4 giờ, 8 giờ và yêu cầu bổ sung cần được giữ lại chỉ khi có đúng chunk chính sách làm căn cứ."),
-        ("8. Rau củ dập úng sau 14 giờ", "Đạt", "Đã trả đúng nguyên tắc không trừ tiền ngay, chỉ đổi hoặc bù ở đơn tiếp theo và yêu cầu gửi thông tin, hình ảnh để xác minh."),
+        ("1. Hoàn tiền bằng thẻ NAPAS", "shopee trả hàng thẻ napas mấy ngày tiền về ví vậy", "Sau khi Shopee xác nhận hoàn tiền, tiền về thẻ hoặc tài khoản liên kết trong 2–5 ngày làm việc; thứ bảy, chủ nhật và ngày lễ không tính.", "Hệ thống trả đúng 2–5 ngày và đúng thẻ NAPAS, nhưng chưa nói rõ mốc tính từ lúc xác nhận đã hoàn tiền và chưa có ví dụ ngày làm việc.", "Đạt một phần"),
+        ("2. Shop giao sai hàng và phí trả hàng", "Shop giao sai đồ, chọn bưu tá hay bưu cục có mất phí không và điều kiện được hỗ trợ cước là gì?", "Lấy hàng tại nhà và gửi tại bưu cục được miễn phí; tự sắp xếp thì trả trước rồi được hỗ trợ khi đủ điều kiện. Cần yêu cầu được chấp nhận, mã vận đơn hợp lệ và thông tin trả hàng đầy đủ.", "Hệ thống đã phân biệt ba cách gửi, nêu điều kiện chấp nhận, mã vận đơn và thời hạn yêu cầu.", "Đạt"),
+        ("3. Đổi riêng áo lỗi trong một bộ", "Mua bộ áo quần, áo lỗi sau 5 ngày; có đổi hoặc hoàn riêng áo không?", "Được báo lỗi trong 7 ngày, nhưng chính sách chưa nói rõ có tách riêng áo khỏi bộ hay phải gửi cả bộ.", "Hệ thống khẳng định được gửi riêng áo và hoàn tiền toàn bộ, vượt quá bằng chứng.", "Chưa đạt"),
+        ("4. Phụ kiện Adore", "Phụ kiện không được bảo hành trọn đời thì lỗi do nhà sản xuất trong 7 ngày có được đổi không?", "Phụ kiện không thuộc bảo hành trọn đời; chính sách cung cấp chưa đủ để kết luận chắc chắn nhánh đổi hàng lỗi có áp dụng cho phụ kiện.", "Hệ thống khẳng định chắc chắn được đổi trong 7 ngày, đồng thời trộn điều kiện bảo hành với đổi hàng.", "Chưa đạt"),
+        ("5. Bảo hành biến tần GD100-PV", "Biến tần bơm năng lượng mặt trời GD100-PV được bảo hành bao lâu và tính từ ngày nào?", "Thời hạn 1,5 năm, tính từ ngày giao hàng ghi trên hóa đơn hoặc phiếu giao hàng.", "Hệ thống trả đúng thời hạn và mốc bắt đầu, nhưng thêm các điều kiện phụ không cần thiết.", "Đạt một phần"),
+        ("6. Inverter gửi tới Nguyễn Văn Quá", "Gửi inverter hòa lưới tới trạm Nguyễn Văn Quá mất bao lâu, ai chịu cước và máy nứt vỡ xử lý thế nào?", "Hoàn tất sửa chữa trong 24 giờ làm việc từ lúc nhận thiết bị; khách chịu cước gửi đến trung tâm; nếu không đủ điều kiện bảo hành thì báo giá, khách đồng ý mới sửa và chịu cước gửi về; nếu đủ điều kiện thì trung tâm chịu cước gửi trả.", "Hệ thống thiếu mốc 24 giờ, thiếu quy trình báo giá khi nứt vỡ và chỉ trả một phần cước.", "Chưa đạt"),
+        ("7. Hotline Kamereo", "Cho xin số hotline khiếu nại và đổi hàng Kamereo.", "Hotline 0812 46 37 27.", "Hệ thống trả đúng số hotline nhưng thêm các mốc xử lý chỉ nên nêu khi có bằng chứng tương ứng.", "Đạt một phần"),
+        ("8. Rau củ dập úng sau 14 giờ", "Nhận rau lúc 15 giờ 30, hàng dập úng; có được trừ ngay công nợ hay phải xử lý thế nào?", "Không trừ ngay công nợ; sau 14 giờ chỉ đổi hoặc bù ở đơn kế tiếp sau khi gửi thông tin và hình ảnh để xác minh.", "Hệ thống trả đúng nguyên tắc không trừ tiền ngay, đổi/bù ở đơn kế tiếp và yêu cầu cung cấp bằng chứng.", "Đạt"),
     ]
-    for title, verdict, explanation in retrieval_cases:
-        story.append(KeepTogether([
-            Paragraph(escape(title), styles["ReportH2"]),
-            rich(f"<b>Kết luận kiểm tra:</b> {escape(verdict)}", styles["BodyVi"]),
-            p(explanation, styles["BodyVi"]),
-        ]))
-    body("Kết quả tổng hợp: 2/8 câu đạt đầy đủ, 3/8 câu đạt một phần và 3/8 câu chưa đạt. Các trường hợp chưa đạt đều liên quan đến việc mô hình suy diễn khi bằng chứng thiếu hoặc trộn hai chính sách khác nhau; đây là lý do hệ thống phải giữ lọc tài liệu, chấm khả năng trả lời và bắt buộc trích nguồn.")
+    for title, question, expected, observed, verdict in retrieval_cases:
+        story.append(Paragraph(escape(title), styles["ReportH2"]))
+        story.append(rich(f"<b>Câu hỏi:</b> {escape(question)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Đáp án chuẩn:</b> {escape(expected)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Kết quả hệ thống:</b> {escape(observed)}", styles["BodyVi"]))
+        story.append(rich(f"<b>Đánh giá:</b> {escape(verdict)}", styles["BodyVi"]))
+    body("Kết quả tổng hợp: 2/8 câu đạt đầy đủ, 3/8 câu đạt một phần và 3/8 câu chưa đạt. Các lỗi chính là bỏ sót đoạn chứa dữ kiện quyết định, trộn hai chính sách khác nhau và suy diễn khi tài liệu chưa đủ căn cứ.")
 
     h1("9. Cách tạo source trong câu trả lời")
     body("Source không do mô hình sinh tự đặt ra. Dịch vụ hỏi đáp lấy source từ những chunk đã vượt qua truy xuất kết hợp, lọc danh tính tài liệu, phân bố điểm và xếp hạng bằng chứng. Với mỗi chunk được chọn, hệ thống tạo một khối bằng chứng có tên file, mã chunk và trang trước khi gọi mô hình.")
@@ -518,33 +524,7 @@ def build():
     h2("Kiểm tra tự động và tài liệu")
     body("Ruff, biên dịch, 22 kiểm thử, bản dựng giao diện và kiểm tra Docker là các bằng chứng có thể chạy lại. README, tài liệu kiến trúc, hồ sơ nghiên cứu dữ liệu và bảng kiểm tra truy xuất được bàn giao cùng mã nguồn. Quy trình CI cần được xác nhận lại sau mỗi lần thay đổi.")
 
-    h1("11. Tiêu chí đánh giá")
-    story.append(table([
-        ["Hạng mục", "Trọng số", "Tự đánh giá", "Căn cứ"],
-        ["Trích xuất và xử lý dữ liệu", "20%", "19/20", "Hồ sơ nghiên cứu dữ liệu, ảnh minh chứng, so sánh nhận dạng ký tự và xử lý theo loại dữ liệu"],
-        ["Cơ sở dữ liệu vector và truy xuất", "20%", "19/20", "Ảnh pgvector, tìm kiếm từ khóa + vector, tập ứng viên và xếp hạng bằng chứng"],
-        ["Tích hợp AI/RAG", "15%", "14/15", "OCR NVIDIA, tạo vector, lời nhắc bám nguồn, trả kết quả từng phần và nguồn"],
-        ["Docker và môi trường", "15%", "15/15", "Dockerfile, Compose, biến môi trường và ảnh quy trình chạy"],
-        ["Quy trình kiểm tra tự động", "10%", "9/10", "Ảnh GitHub Actions; cần xác nhận lần chạy của mã hiện tại"],
-        ["Kiểm thử", "10%", "10/10", "22 kiểm thử đơn vị/API và kiểm tra chống bịa đặt"],
-        ["Tài liệu và trình diễn", "10%", "10/10", "README, tài liệu kiến trúc, hồ sơ nghiên cứu, PDF và bảng truy xuất"],
-        ["Tổng tự đánh giá", "100%", "96/100", "Điểm tham khảo, cần reviewer xác nhận"],
-    ], [47 * mm, 18 * mm, 22 * mm, 73 * mm], regular, small=True))
-    story.append(rich("Phần nghiên cứu dữ liệu nằm trong 20% trích xuất và xử lý dữ liệu: khảo sát loại dữ liệu, thiết kế tập đánh giá, so sánh phương án, phân tích lỗi, ghi quyết định và đưa kết quả trở lại cấu hình vận hành.", styles["Callout"]))
-
-    h1("12. Điểm cộng")
-    story.append(table([
-        ["Nội dung mở rộng", "Bằng chứng trong mã nguồn"],
-        ["Tìm kiếm kết hợp và xếp hạng lại", "PostgreSQL toàn văn, pgvector và EvidenceService"],
-        ["Hỗ trợ CSV/XLSX", "Bộ định tuyến trích xuất theo phần mở rộng"],
-        ["Tiến trình nền, thử lại và khôi phục", "Hàng đợi PostgreSQL, thử lại NIM và đưa job lỗi về hàng đợi"],
-        ["API xóa, danh sách, đổi tên và hủy", "Các đường dẫn tài liệu của dịch vụ"],
-        ["Trả kết quả từng phần", "Các đường dẫn /query/stream"],
-        ["Nghiên cứu dữ liệu theo loại", "hồ sơ nghiên cứu dữ liệu, ảnh minh chứng và bảng đánh giá"],
-    ], [75 * mm, 85 * mm], regular, small=True))
-    body("Các nội dung mở rộng chỉ có ý nghĩa khi luồng cơ bản đã ổn định. Những phần gọi dịch vụ trực tuyến cần được xác nhận lại trong môi trường triển khai thật.")
-
-    h1("13. Hạn chế và kế hoạch tiếp theo")
+    h1("11. Hạn chế và kế hoạch tiếp theo")
     bullet("Bộ đánh giá hiện tập trung 5 PDF SynthDocQA; cần thêm bộ tài liệu thực tế cân bằng theo loại dữ liệu.")
     bullet("Chỉ mục phần tử hình và OCR vùng chú thích chưa bật cho mọi tài liệu vận hành.")
     bullet("Bộ xếp hạng hiện dựa trên luật; chưa có mô hình xếp hạng học từ phản hồi người dùng.")
