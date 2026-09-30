@@ -33,16 +33,23 @@ def stream_query(payload: QueryRequest, conversation_id: str | None = None, rag_
     done = object()
     def run():
         try:
+            conversation_history = []
             if conversation_id:
+                previous_messages = repo.get_messages(conversation_id)
+                conversation_history = [
+                    {"role": message.get("role"), "content": message.get("content", "")}
+                    for message in previous_messages[-8:]
+                ]
                 repo.add_message(conversation_id, "user", payload.question.strip())
             result = rag_service.answer_question(
                 question=payload.question, top_k=payload.top_k or TOP_K,
                 document_id=payload.document_id, document_ids=payload.document_ids,
+                conversation_history=conversation_history,
                 on_token=lambda token: events.put({"type": "token", "text": token}),
             )
             if conversation_id:
                 repo.add_message(conversation_id, "assistant", result.get("answer", ""), result.get("sources", []), result.get("retrieved_chunks", []))
-            events.put({"type": "metadata", "sources": result.get("sources", []), "retrieved_chunks": result.get("retrieved_chunks", [])})
+            events.put({"type": "metadata", "answer": result.get("answer", ""), "sources": result.get("sources", []), "retrieved_chunks": result.get("retrieved_chunks", [])})
             events.put(done)
         except Exception as exc:
             logger.error("Streaming query failed: %s", exc, exc_info=True)

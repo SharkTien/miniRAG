@@ -1001,6 +1001,9 @@ export default function App() {
             const item = JSON.parse(raw)
             if (item.type === 'token') { answerText += item.text || ''; updateAssistant() }
             if (item.type === 'metadata') {
+              // Chitchat/direct answers may not emit token events. The backend
+              // therefore includes the completed answer in metadata as well.
+              if (!answerText.trim() && item.answer) answerText = item.answer
               sources = item.sources || []
               chunks = item.retrieved_chunks || []
               setChatActiveSources(sources)
