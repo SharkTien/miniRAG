@@ -1,44 +1,34 @@
-# Verification Report
+# Báo cáo kiểm tra hiện tại
 
-Ngày ghi nhận: `2026-09-28`.
-
-## Kết quả
+**Ngày:** 30/09/2026
+**Commit:** `05185d9`
 
 | Kiểm tra | Lệnh | Kết quả |
 |---|---|---|
-| Python syntax/bytecode | `python -m compileall -q app tests` | PASS |
-| Unit + API + OCR/evidence tests | `PYTHONPATH=. pytest -q tests` | PASS — 22 passed |
-| Ruff critical syntax checks | `ruff check app tests --select E9` | PASS — All checks passed |
-| Compose schema/interpolation | `docker compose config --quiet` | PASS |
-| Frontend build | `npm ci` + `npm run build` trong `frontend/` | PASS |
-| Frontend Docker image | `docker build -t mini-rag-frontend:ci frontend` | PASS |
-| Compose smoke run | API `/health` + frontend `/` + teardown | API PASS; full local run blocked by stale Docker network collision |
-| Retrieval verification | `retrieval_verification.csv` | PASS — 10/10 |
-| Repository quality gate | `python tools/quality_gate.py` | PASS — 100/100 |
+| Ruff | `ruff check app tests` | PASS |
+| Compile | `python -m compileall -q app tests` | PASS |
+| Unit/API | `python -m pytest -q tests` | PASS — 22 passed |
+| Quality gate | `python tools/quality_gate.py` | PASS — 98,8/100 |
+| Frontend | `npm run build` | PASS |
+| Compose syntax | `docker compose config --quiet` | PASS |
+| Runtime stack | `docker compose ps --all` | API, worker, PostgreSQL, MinIO, frontend đang Up; PostgreSQL healthy |
+| Retrieval verification | `retrieval_verification.csv` | Tập kiểm tra 10 câu được bàn giao; kết quả cần chạy lại khi re-ingest dữ liệu |
+| GitHub Actions | CI commit `05185d9` | `in_progress` tại thời điểm lập báo cáo |
 
-## Phạm vi test đã chạy
+## Phạm vi test
 
-- Cleaning whitespace/control characters.
-- Semantic chunking và page/section metadata.
-- Chuẩn hóa bounding-box metadata.
-- Health route contract.
-- Query trả `answer` và `sources`.
-- Query rỗng bị reject HTTP 400.
-- Upload trả document ở trạng thái `queued`.
-- Upload file có phần mở rộng không hỗ trợ bị từ chối HTTP 400.
-- Query không có bằng chứng trả về `sources=[]` và không sinh nguồn giả.
-- Config loading kiểm tra database, embedding, LLM, chunk và top-k.
-- OCR routing/evidence service regression tests.
-- Naming theo PEP 8 và public docstring coverage 100% trong `app`.
+- Làm sạch control character, whitespace và ranh giới đoạn.
+- Chunking theo cấu trúc/page metadata.
+- API health, upload hợp lệ, extension không hỗ trợ, câu hỏi rỗng.
+- Query không có evidence và bắt buộc source.
+- Evidence reranking, answerability, document filtering.
+- Upload có tên hiển thị và tương thích service test giả lập.
+- OCR/NIM fallback không để semantic normalization treo vô hạn.
 
-## Ghi chú môi trường
+## Giới hạn xác nhận
 
-Lần chạy ban đầu thiếu `pytest`, `ruff` và một số runtime dependency trong
-Python host. Đã cài đúng `requirements-dev.txt` cùng các dependency runtime
-cần cho test; không sửa source code để làm test pass. CI thực hiện cả việc tạo
-CI được cấu hình để tạo API và frontend image, chạy smoke test bằng Docker
-Compose, gọi `/health` và trang frontend rồi dọn container/volume. Chuỗi tương
-đương cho API đã được kiểm tra cục bộ. Frontend build và frontend Docker image
-đã đạt; lần Compose đầy đủ tại máy hiện tại bị chặn bởi network Docker cũ
-`mini_rag_default` chiếm dải địa chỉ. GitHub Actions đã được kích hoạt cho các
-commit trên nhánh `main`.
+Test local không thay thế GitHub Actions. LLM, embedding và OCR hosted cần credential thật; test NIM trực tiếp không được xem là unit test offline. Benchmark 5 PDF là báo cáo riêng trong `evaluation/`, không dùng để khẳng định mọi tài liệu production.
+
+Hồ sơ nghiên cứu dữ liệu và các phép so sánh OCR, chunking, bảng, hình và
+annotation được ghi tại [`docs/report.md`](../docs/report.md); đây là bằng chứng
+cho phần Data ingestion & processing trong evaluation.

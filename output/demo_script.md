@@ -1,72 +1,46 @@
-# Demo Script (20–30 phút)
+# Kịch bản demo
 
-## 1. Context và mục tiêu — 2 phút
-
-Nêu bài toán: ingest tài liệu, hỏi đáp có grounding và citation; nhấn mạnh
-answer không đủ nếu không truy được source.
-
-## 2. Architecture — 4 phút
-
-Mở [architecture.md](architecture.md), chỉ vào hai flow: ingestion qua worker và
-query qua retrieval/evidence/LLM.
-
-## 3. Start stack — 3 phút
+## 1. Khởi động
 
 ```bash
 cp .env.example .env
-# điền các placeholder secret/password
+# điền secret/password trong môi trường local
 docker compose up -d --build
 docker compose ps
 curl -fsS http://localhost:41873/health
 ```
 
-## 4. Upload file tùy chọn và kiểm tra ingestion — 4 phút
+Mở frontend tại `http://localhost:4173`.
 
-Lệnh dưới đây nhận một file được hỗ trợ, chờ worker xử lý xong, tạo một
-conversation, gửi câu hỏi và đọc lại messages từ PostgreSQL:
+## 2. Upload và theo dõi ingestion
 
-```bash
-chmod +x scripts/demo_terminal.sh
-scripts/demo_terminal.sh \
-  "/absolute/path/to/your-document.pdf" \
-  "Your question in the language you want to test"
-```
+1. Upload một PDF/TXT/DOCX.
+2. Đặt tên hiển thị nếu cần.
+3. Quan sát `queued → processing → processed`.
+4. Mở chi tiết extraction để xem text, page, chunk và confidence OCR.
+5. Xóa thử một tài liệu đang xử lý để minh họa trạng thái `cancelled`.
 
-Supported extensions are configured in `app/config/constants.py`. The upload
-request creates a `queued` document; the worker changes it to `processing` and
-then `processed`. Raw files are stored in MinIO, while extracted chunks and
-embeddings are stored in PostgreSQL/pgvector.
+## 3. Query có nguồn
 
-To inspect the worker independently:
+Đặt câu hỏi có dữ kiện rõ trong tài liệu. Chỉ vào câu trả lời, tên file, chunk, trang và snippet. Sau đó hỏi một câu không có trong tài liệu để minh họa evidence gate.
 
-```bash
-docker compose logs -f ntc_document_rag_worker
-```
+## 4. Demo retrieval khó
 
-## 5. Query grounded — 4 phút
+- Câu hỏi về bảng hoàn tiền NAPAS: kiểm tra hàng đúng phương thức và thời gian.
+- Câu hỏi về nhiều nhánh trả hàng: kiểm tra phí của từng nhánh không bị trộn.
+- Câu hỏi có thương hiệu Adore/Kamereo: kiểm tra nguồn chỉ còn tài liệu đúng thương hiệu.
 
-Gửi câu hỏi có đáp án trong file. Chỉ vào `answer`, `file_name`, `chunk_id`,
-`page`, `snippet`; sau đó thử câu hỏi ngoài tài liệu để minh họa evidence gate.
-
-## 6. Test và CI — 3 phút
+## 5. Kiểm tra chất lượng
 
 ```bash
-PYTHONPATH=. pytest -q tests
-ruff check app tests --select E9
+ruff check app tests
 python -m compileall -q app tests
+python -m pytest -q tests
+python tools/quality_gate.py
+npm --prefix frontend run build
 docker compose config --quiet
 ```
 
-Mở `.github/workflows/ci.yml` để chỉ ra thứ tự lint → unit/API test → frontend
-build → Docker build và smoke test API/frontend.
+## 6. CI và bàn giao
 
-## 7. Retrieval verification — 3 phút
-
-Mở [retrieval_verification.csv](retrieval_verification.csv), giải thích 10
-câu hỏi thuộc 5 document và quy tắc pass là filename source phải khớp expected.
-Đối chiếu thêm benchmark chi tiết trong `evaluation/benchmark_summary.md`.
-
-## 8. Hạn chế và Q&A — 2–7 phút
-
-Nêu dependency vào model endpoint, OCR/layout là phần khó, reranker hiện
-rule-based; hướng tiếp theo là cross-encoder, feedback loop và human review.
+Mở `.github/workflows/ci.yml`: push/pull request chạy lint, compile, test, frontend build, Docker build và Compose smoke test. Ghi nhận trạng thái runner từ GitHub Actions, không suy đoán từ local.

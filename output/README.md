@@ -1,70 +1,70 @@
-# Mini RAG Service — Submission Output
+# Hồ sơ bàn giao Mini RAG Service
 
-Đây là bộ hồ sơ trình bày và bằng chứng đối chiếu với `SUBJECT.md`. Source code
-gốc vẫn nằm ở thư mục cha; các liên kết dưới đây dùng đường dẫn tương đối để
-reviewer có thể kiểm tra trực tiếp.
+**Ngày cập nhật:** 30/09/2026
+**Commit source hiện tại:** `05185d9`
 
-## Kết luận ngắn
+Thư mục này là bộ hồ sơ được đối chiếu lại với source code hiện tại. Báo cáo chính có đầy đủ milestone, acceptance criteria, evaluation criteria và bonus tại [milestones_bonus_ec.md](milestones_bonus_ec.md). Bản PDF tương ứng là [milestones_bonus_ec.pdf](milestones_bonus_ec.pdf).
 
-Project đáp ứng luồng chính:
+## Trạng thái kiểm tra tại thời điểm cập nhật
+
+| Hạng mục | Kết quả |
+|---|---|
+| `ruff check app tests` | Đạt |
+| `python -m compileall -q app tests` | Đạt |
+| `python -m pytest -q tests` | 22 passed |
+| `python tools/quality_gate.py` | 98,8/100 |
+| `npm run build` | Đạt |
+| `docker compose config --quiet` | Đạt |
+| Docker Compose local | API, worker, PostgreSQL, MinIO và frontend đang chạy |
+| GitHub Actions | Workflow của commit `05185d9` đang chạy tại thời điểm lập báo cáo |
+
+## Luồng hệ thống hiện tại
 
 ```text
-PDF/TXT/DOCX → extract/OCR → normalize/chunk → embedding → pgvector
-                                                        ↓
-Question → hybrid retrieval → evidence gate → grounded LLM → answer + sources
+PDF/TXT/DOCX/CSV/XLSX/PPTX/ảnh
+        ↓
+Upload API → MinIO + PostgreSQL trạng thái queued
+        ↓
+Worker nền → extract/layout/OCR NVIDIA → làm sạch
+        ↓
+chuẩn hóa ngữ nghĩa có timeout/fallback → chunk
+        ↓
+embedding NVIDIA → PostgreSQL + pgvector và metadata
+        ↓
+Question + conversation history → contextual query resolution → query planning → hybrid lexical + dense retrieval
+        ↓
+document/evidence filtering → reranking → grounded NVIDIA LLM
+        ↓
+answer + source citations
 ```
 
-Kết quả kiểm tra tại thời điểm đóng gói:
+## Nội dung hồ sơ
 
-```text
-22 tests passed
-ruff E9: All checks passed
-compileall: passed
-docker compose config --quiet: passed
-frontend npm run build: passed
-```
+- [milestones_bonus_ec.md](milestones_bonus_ec.md): milestone, acceptance criteria, evaluation và bonus.
+- [`../docs/report.md`](../docs/report.md): hồ sơ nghiên cứu dữ liệu, benchmark và quyết định xử lý theo loại dữ liệu.
+- [acceptance_matrix.md](acceptance_matrix.md): ma trận đối chiếu từng tiêu chí nghiệm thu.
+- [requirements_traceability.md](requirements_traceability.md): truy vết yêu cầu trong `SUBJECT.md` tới source.
+- [architecture.md](architecture.md): kiến trúc và data flow hiện tại.
+- [api_examples.md](api_examples.md): health, upload, query, streaming, rename và cancel.
+- [demo_script.md](demo_script.md): kịch bản demo.
+- [test_report.md](test_report.md): bằng chứng kiểm tra mới nhất.
+- [retrieval_verification.csv](retrieval_verification.csv): tập kiểm tra truy xuất cơ bản.
+- [retrieval_verification.xlsx](retrieval_verification.xlsx): cùng dữ liệu ở dạng bảng tính.
 
-## Hồ sơ trong thư mục này
-
-- [acceptance_matrix.md](acceptance_matrix.md): đối chiếu từng acceptance criterion và bằng chứng.
-- [requirements_traceability.md](requirements_traceability.md): đối chiếu chi tiết mục 2 và mục 3 của `SUBJECT.md`.
-- [architecture.md](architecture.md): kiến trúc, data flow và các quyết định kỹ thuật.
-- [api_examples.md](api_examples.md): demo health, upload, query và các ca lỗi.
-- [demo_script.md](demo_script.md): kịch bản demo 20–30 phút.
-- [test_report.md](test_report.md): lệnh kiểm tra và kết quả reproducible.
-- [retrieval_verification.csv](retrieval_verification.csv): 10 câu hỏi kiểm tra source retrieval.
-
-## Các file deliverable chính ở root
-
-- [README.md](../README.md)
-- [Dockerfile](../Dockerfile)
-- [docker-compose.yml](../docker-compose.yml)
-- [.env.example](../.env.example)
-- [CI workflow](../.github/workflows/ci.yml)
-- [Frontend](../frontend/)
-- [Architecture source](../docs/architecture.md)
-- [Benchmark summary](../evaluation/benchmark_summary.md)
-
-## Cách reviewer chạy nhanh
+## Chạy nhanh
 
 ```bash
 cp .env.example .env
-# thay toàn bộ placeholder password/secret trong .env
+# điền các password/API key trong môi trường triển khai, không commit .env
 docker compose up -d --build
 curl -fsS http://localhost:41873/health
-PYTHONPATH=. pytest -q tests
-npm --prefix frontend ci
-npm --prefix frontend run build
 ```
 
-API không yêu cầu đăng nhập. Upload tạo trạng thái `queued`; worker xử lý
-ingestion và query chỉ nên chạy sau khi document chuyển sang `processed`.
-Frontend production được phục vụ qua Nginx tại cổng `FRONTEND_PORT` (mặc định
-`4173`) và chuyển tiếp API tới backend.
+Frontend production chạy tại `http://localhost:4173`. Hệ thống không yêu cầu đăng nhập. Upload trả `queued`; worker xử lý nền và chuyển sang `processed`.
 
-Demo hoàn chỉnh với file và câu hỏi tự chọn:
+## Giới hạn được ghi nhận
 
-```bash
-chmod +x scripts/demo_terminal.sh
-scripts/demo_terminal.sh "/absolute/path/to/file.pdf" "Question in the target language"
-```
+- Chất lượng và thời gian trả lời phụ thuộc endpoint embedding/LLM NVIDIA, giới hạn tốc độ và kích thước tài liệu.
+- Reranker hiện là deterministic evidence service; chưa dùng cross-encoder học từ dữ liệu phản hồi.
+- Các chỉ số benchmark SynthDocQA trong `evaluation/` là kết quả của bộ 5 PDF và cấu hình benchmark riêng, không đại diện cho mọi tài liệu production.
+- CI cần được xác nhận hoàn tất trên GitHub Actions sau mỗi thay đổi; local pass không thay thế runner.

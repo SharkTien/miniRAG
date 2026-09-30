@@ -1,91 +1,47 @@
-# Đối chiếu mục 2 và mục 3
-
-Tài liệu này đối chiếu trực tiếp các yêu cầu trong `SUBJECT.md` với phần đã
-triển khai. Trạng thái `Đạt` nghĩa là đã có trong mã nguồn và có thể kiểm tra;
-`Đã cấu hình` nghĩa là workflow đã khai báo nhưng cần một runner CI thực thi để
-xác nhận kết quả.
+# Truy vết yêu cầu tới source
 
 ## Mục 2 — Mục tiêu
 
-| Yêu cầu | Bằng chứng | Trạng thái |
+| Yêu cầu | Source/bằng chứng | Kết luận |
 |---|---|---|
-| Document → Extract/Clean → Chunking → Embedding → Vector DB → Retrieval → LLM → Answer + Source | [architecture.md](architecture.md), `app/ingestion`, `app/retrieval` | Đạt |
-| Build | `Dockerfile`, `.github/workflows/ci.yml` | Đạt — Docker build đã chạy thành công cục bộ |
-| Test | `tests/`, `.github/workflows/ci.yml` | Đạt ở lần kiểm tra ghi trong [test_report.md](test_report.md) |
-| Containerize | `Dockerfile`, `docker-compose.yml` | Đạt |
-| Run | `docker compose up -d --build` trong README | Đạt theo cấu hình Compose |
-| CI khi có thay đổi | `.github/workflows/ci.yml` chạy khi push/pull request | Đã cấu hình; chuỗi tương đương runner đã đạt cục bộ |
+| Document → extract → chunk → embedding → vector DB | `app/ingestion`, `app/repositories/chunk_repo.py` | Đạt |
+| Question → retrieval → LLM → answer + source | `app/retrieval/rag_service.py`, `app/api/routers/query.py` | Đạt |
+| Build, test, containerize, run | `Dockerfile`, `docker-compose.yml`, CI | Đạt local |
 
-CI có thêm job build frontend bằng Node.js 22 (`npm ci` và `npm run build`). Job
-Docker khởi động cả API và frontend, sau đó kiểm tra `/health` và trang web.
+## Năng lực nghiên cứu dữ liệu
+
+Ngoài luồng kỹ thuật, repository có hồ sơ nghiên cứu tại [`docs/report.md`](../docs/report.md). Hồ sơ này mô tả cách khảo sát dữ liệu, phân loại theo loại câu hỏi, thiết kế benchmark, so sánh phương án OCR/chunk/retrieval, phân tích lỗi và chuyển kết quả thành quyết định cấu hình. Đây là bằng chứng cho tiểu mục 8 điểm nằm trong trọng số Data ingestion & processing, không phải một hạng mục cộng thêm làm thay đổi tổng 100%.
 
 ## Mục 3 — Functional Requirements
 
-### 3.1 Document Ingestion
+### 3.1 Document ingestion
 
-Đạt: hệ thống nhận PDF, TXT và DOCX; kiểm tra phần mở rộng và kích thước; lưu
-file gốc; worker thực hiện trích xuất/OCR, làm sạch, chunk, embedding và lưu
-vector cùng metadata vào PostgreSQL/pgvector.
+`DocumentService.process_upload` kiểm tra extension, kích thước, SHA-256, lưu MinIO và tạo document record. Worker gọi `ExtractService`, làm sạch, chunk, embedding và lưu vector/metadata. Upload không chờ toàn bộ pipeline mà trả `queued`.
 
-Metadata tối thiểu được lưu gồm `document_id`, `file_name`, `chunk_id`,
-`content`, `embedding_model` và `created_at`. Metadata bổ sung gồm trang,
-section, loại chunk, độ tin cậy OCR và bằng chứng hình ảnh.
+### 3.2 Health check
 
-### 3.2 Health Check API
+`GET /health` trả `{"status":"ok"}`. PostgreSQL và MinIO có health/dependency checks riêng trong Compose.
 
-```http
-GET /health
-```
+### 3.3 Document upload API
 
-Response khi tiến trình API hoạt động:
-
-```json
-{"status": "ok"}
-```
-
-Đây là kiểm tra tiến trình API. Trạng thái PostgreSQL và MinIO được kiểm tra
-riêng bằng healthcheck của Docker Compose; endpoint này chưa phải readiness
-check tổng hợp của mọi phụ thuộc.
-
-### 3.3 Document Upload API
-
-```http
-POST /documents
-```
-
-API trả trạng thái `queued` ngay sau khi lưu file. Worker xử lý các bước
-extract, chunk, embedding và lưu database ở chế độ nền. Vì vậy `total_chunks`
-ban đầu bằng `0`; sau khi hoàn tất, lấy kết quả tại:
-
-```http
-GET /documents/{document_id}/extraction
-```
-
-Response sau xử lý có `document_id`, `file_name`, `status` và `total_chunks`.
+`POST /documents` và `POST /api/documents` nhận một hoặc nhiều file. Có thể truyền `display_name`/`display_names`. Response trả document id, tên hiển thị, tên gốc, trạng thái và số chunk ban đầu.
 
 ### 3.4 Query API
 
-```http
-POST /query
-```
-
-API trả `answer` và danh sách `sources`. Mỗi source có tối thiểu `file_name` và
-`chunk_id`, đồng thời có thể có trang, điểm tương đồng và đoạn trích.
-
-Nếu không có bằng chứng phù hợp, hệ thống từ chối hoặc báo thiếu dữ liệu thay
-vì sinh câu trả lời dựa trên nội dung không xác định được nguồn.
+`POST /query` và `/api/query` trả `answer` cùng `sources`. `POST /query/stream` và `/api/query/stream` trả token streaming rồi metadata nguồn. Không có evidence thì không được sinh câu trả lời không nguồn.
 
 ## Mục 4 — Data & Retrieval
 
-Luồng thực tế là:
+PostgreSQL + pgvector; lexical full-text search dùng PostgreSQL `to_tsquery`/BM25 pass; dense search dùng pgvector; candidate pool được rerank bằng EvidenceService. Cấu hình tách trong `app/config/settings.py` và `.env.example`.
 
-```text
-Question → Embedding → hybrid vector/lexical search → Top-K chunks
-         → evidence gate/rerank → grounded LLM → Answer + Source
-```
+## Mục 5 — Containerization
 
-PostgreSQL với pgvector lưu vector, nội dung chunk và metadata. Các cấu hình
-`DATABASE_URL`, `EMBEDDING_MODEL`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`,
-`TOP_K` và `SIMILARITY_THRESHOLD` được đọc từ biến môi trường trong
-`app/config/settings.py`; không dùng trực tiếp trong business logic.
-`.env.example` và `docker-compose.yml` cung cấp các giá trị mẫu.
+Có API, worker, frontend, PostgreSQL + pgvector và MinIO trong Compose. Có `Dockerfile`, frontend Dockerfile, `docker-compose.yml`, `.env.example`; secret thật không nằm trong source commit.
+
+## Mục 6 — CI
+
+`.github/workflows/ci.yml` chạy trên push/pull request: compile, ruff, quality gate, test, frontend build, Docker build và Compose smoke test. Commit mới nhất đang được GitHub Actions xác nhận tại thời điểm báo cáo.
+
+## Mục 7 — Testing
+
+Có unit test cleaning/chunking/config/evidence, API test health/upload/query/error, và bảng retrieval verification 10 câu.

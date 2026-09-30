@@ -1,11 +1,99 @@
-question,expected_source,retrieved_source,verification_rule,result
-What is the form number on the Capital Expenditure Approval Form?,doc_0000_s1045958549.pdf,doc_0000_s1045958549.pdf,source filename must match,pass
-How many sections are included in the Capital Expenditure Approval Form?,doc_0000_s1045958549.pdf,doc_0000_s1045958549.pdf,source filename must match,pass
-How many fields are marked as required?,doc_0000_s1045958549.pdf,doc_0000_s1045958549.pdf,source filename must match,pass
-What is the approval status shown on the form?,doc_0000_s1045958549.pdf,doc_0000_s1045958549.pdf,source filename must match,pass
-What is the total amount requested?,doc_0000_s1045958549.pdf,doc_0000_s1045958549.pdf,source filename must match,pass
-What is the retention period stated in the policy?,doc_0000_s1131058660.pdf,doc_0000_s1131058660.pdf,source filename must match,pass
-Which department owns the process?,doc_0000_s341236940.pdf,doc_0000_s341236940.pdf,source filename must match,pass
-What warning is shown in the figure?,doc_0000_s39946201.pdf,doc_0000_s39946201.pdf,source filename must match,pass
-What is the effective date of the procedure?,doc_0000_s71722309.pdf,doc_0000_s71722309.pdf,source filename must match,pass
-Which role gives final approval?,doc_0000_s71722309.pdf,doc_0000_s71722309.pdf,source filename must match,pass
+Question,Expected Source,Retrieved Source,Expected Answer,Retrieved Answer,Result
+shopee trả hàng thẻ napas mấy ngày tiền về ví vậy,rank1_Cách_đổi_trả_hàng_trên_Shopee_và_các_lưu_ý_quan_trọng.pdf,rank1_Cách_đổi_trả_hàng_trên_Shopee_và_các_lưu_ý_quan_trọng.pdf,"Nếu bạn thanh toán Shopee bằng thẻ nội địa NAPAS, sau khi Shopee đã chấp nhận hoàn tiền, tiền sẽ được hoàn về chính thẻ/tài khoản ngân hàng liên kết với thẻ NAPAS trong khoảng 2–5 ngày làm việc, tùy ngân hàng.
+
+Lưu ý là không phải 2–5 ngày kể từ lúc bạn gửi hàng trả. Mốc này tính từ lúc Shopee xác nhận “đã hoàn tiền”.
+
+Ví dụ:
+
+Thứ Hai Shopee báo Đã hoàn tiền → thường nhận trong Thứ Tư–Thứ Hai tuần sau.
+Thứ Bảy/CN và ngày lễ không tính là ngày làm việc.
+
+Nếu bạn đang thấy trạng thái “Đã hoàn tiền” rồi mà muốn, bạn gửi mình ngày + giờ Shopee báo đã hoàn tiền, mình tính thử ngày sớm nhất/muộn nhất tiền có thể về cho bạn.",Tiền hoàn trả khi đổi trả hàng đã thanh toán bằng Thẻ nội địa Napas sẽ được chuyển về tài khoản Thẻ nội địa Napas trong khoảng 2 – 5 ngày làm việc (tùy ngân hàng).,PASS
+"Shop giao sai đồ mà mình lỡ bóc seal rồi quay video lại, giờ chọn bưu tá tới nhà lấy hay tự đem ra bưu cục gửi thì shopee có bắt mình trả phí ship ko, với cả điều kiện gì mới đc shopee hỗ trợ tiền cước trả hàng thế shop?",rank1_Cách_đổi_trả_hàng_trên_Shopee_và_các_lưu_ý_quan_trọng.pdf,rank1_Cách_đổi_trả_hàng_trên_Shopee_và_các_lưu_ý_quan_trọng.pdf,"Nếu shop giao sai hàng, trường hợp của bạn thuộc nhóm Shopee cho phép Trả hàng/Hoàn tiền. Việc bạn đã bóc seal nhưng có quay video lại không đồng nghĩa mất quyền trả hàng; quan trọng là bạn chứng minh được hàng nhận thực tế không đúng đơn và khi hoàn trả phải giữ hàng/phụ kiện trong tình trạng phù hợp. Shopee cũng yêu cầu người mua nên quay video/chụp ảnh lúc nhận và đóng gói hàng hoàn.
+
+Về phí ship trả hàng: bạn nên chọn bưu tá tới lấy hoặc ra bưu cục
+
+Cả hai hình thức đều miễn phí trả hàng:
+
+Cách trả	Bạn có phải trả tiền ship?
+Bưu tá tới nhà lấy	Không
+Tự mang ra bưu cục	Không
+Tự sắp xếp đơn vị vận chuyển	Có, trả trước rồi mới được Shopee hỗ trợ lại
+
+Với trả tại bưu cục, Shopee cung cấp mã vận đơn; bạn đưa mã đó cho nhân viên bưu cục để được miễn phí trả hàng.
+
+Trong trường hợp của bạn, mình sẽ chọn ""Bưu tá tới lấy"" hoặc ""Trả hàng tại bưu cục"", không chọn ""Tự sắp xếp"". Như vậy bạn không phải ứng tiền cước rồi chờ Shopee hoàn.","Shopee sẽ miễn phí phí trả hàng nếu các điều kiện sau được đáp ứng:
+
+Yêu cầu trả hàng/hoàn tiền đã được Shopee chấp nhận.
+Bạn đã điền đầy đủ thông tin trả hàng và mã vận đơn, mã vận đơn có trạng thái “giao hàng thành công”.
+Người bán hoặc Shopee đồng ý hoàn tiền.
+Đơn hàng không phải do người bán tự vận chuyển.
+Bạn sử dụng tài khoản đã đặt hàng và tài khoản đã liên kết phương thức nhận tiền hoàn (ví dụ ShopeePay, tài khoản ngân hàng, thẻ tín dụng, v.v.).
+Phương thức gửi hàng:
+
+Phương thức	Phí trả hàng	Yêu cầu bổ sung
+Đơn vị vận chuyển đến lấy hàng (shipper tới lấy)	Miễn phí	Chọn thời gian/địa chỉ lấy, đóng gói, dán phiếu gửi, Shopee cung cấp mã vận đơn.
+Gửi hàng tại bưu cục (tự đem)	Miễn phí	Chọn đơn vị vận chuyển, đóng gói, dán phiếu gửi, đem gói tới bưu cục đã chọn.
+Nếu bất kỳ điều kiện nào trong danh sách trên không được đáp ứng, Shopee có thể yêu cầu bạn thanh toán phí trả hàng (thường là phí vận chuyển của đơn vị vận chuyển).
+
+Lưu ý:
+
+Bạn đã quay video mở seal, đây là bằng chứng quan trọng và sẽ giúp xét duyệt nhanh hơn.
+Đảm bảo gửi yêu cầu trong vòng 15 ngày kể từ khi đơn hàng được cập nhật “giao hàng thành công” (hoặc 24 h nếu là thực phẩm tươi sống, đông lạnh).
+Nếu bạn chưa gửi yêu cầu hoặc chưa có mã vận đơn, hãy thực hiện ngay để tránh mất phí.",PASS
+"Em mua đồ online của Adore được 5 ngày, về mới phát hiện áo bị lỗi may nhưng quần thì bình thường. Em muốn đổi mỗi cái áo sang mẫu khác, nếu không có mẫu thay thế thì có được hoàn tiền riêng cái áo không, hay phải gửi lại cả bộ?",008_rank1_chính_sách_đổi_hàng.pdf,008_rank1_chính_sách_đổi_hàng.pdf,"Vì bạn mua online và phát hiện áo bị lỗi do nhà sản xuất sau 5 ngày, trường hợp này vẫn nằm trong thời hạn 7 ngày để báo đổi/trả. Với sản phẩm lỗi, Adore quy định khách hàng được đổi sang bất kỳ sản phẩm nào; nếu không chọn sản phẩm thay thế thì được hoàn 100% giá trị trên hóa đơn.
+
+Tuy nhiên, chính sách không nói rõ trường hợp một bộ gồm áo + quần nhưng chỉ áo bị lỗi thì có được tách riêng áo để đổi/hoàn tiền hay bắt buộc phải xử lý cả bộ. Vì vậy không thể kết luận chắc chắn rằng bạn được hoàn tiền riêng phần áo, cũng không thể khẳng định phải gửi lại cả bộ.
+
+Nếu đổi/trả do lỗi nhà sản xuất, Adore chịu phí vận chuyển theo chính sách.","Bạn có thể đổi từng chiếc áo riêng lẻ
+
+Đối với đơn hàng online, bạn được báo cáo lỗi trong 7 ngày kể từ ngày nhận hàng.
+Khi phát hiện lỗi may, bạn có thể đổi sang bất kỳ mẫu áo nào (hoặc bất kỳ sản phẩm nào) trong thời hạn này.
+Nếu không có mẫu thay thế, Adore sẽ hoàn trả 100 % tiền trên hóa đơn (tức là toàn bộ số tiền đã thanh toán cho đơn hàng).
+Bạn chỉ cần gửi lại chỉ chiếc áo bị lỗi; quần bình thường không cần gửi lại.
+Hàng trả được gửi về địa chỉ: Văn phòng Adore dress, Nhà N3‑13, số 88 Võ Chí Công, Tây Hồ, Hà Nội.
+Adore chịu 100 % phí chuyển hàng lại khách, còn bạn chỉ cần hỗ trợ phí ship gửi hàng từ khách đến Adore.
+Tóm tắt quy trình
+
+Báo lỗi trong 7 ngày kể từ ngày nhận hàng.
+Gửi lại chiếc áo bị lỗi (điền nội dung muốn đổi).
+Nếu có mẫu thay thế, nhận áo mới; nếu không, nhận hoàn tiền toàn bộ hóa đơn.
+Bạn không cần gửi lại toàn bộ bộ quần áo.",PASS
+"Phụ kiện của Adore có được bảo hành trọn đời không ạ? Nếu phụ kiện bị lỗi do nhà sản xuất trong 7 ngày đầu thì em được đổi theo chính sách đổi hàng hay vẫn không được vì chính sách bảo hành nói phụ kiện không được bảo hành?
+",008_rank1_chính_sách_đổi_hàng.pdf,008_rank1_chính_sách_đổi_hàng.pdf,"Không ạ. Chính sách bảo hành trọn đời của Adore không áp dụng cho phụ kiện.
+
+Tuy nhiên, việc phụ kiện có được đổi khi bị lỗi do nhà sản xuất trong 7 ngày đầu lại là vấn đề khác. Chính sách đổi hàng quy định sản phẩm lỗi do nhà sản xuất được thu hồi và khách hàng được đổi sang bất kỳ sản phẩm nào, nhưng phần chính sách bạn cung cấp không nói rõ phụ kiện có bị loại khỏi trường hợp đổi do lỗi nhà sản xuất hay không.
+
+Vì vậy, không nên kết luận rằng “phụ kiện không được bảo hành nên cũng không được đổi”. Bảo hành và đổi hàng là hai chính sách/nhánh khác nhau, và chính sách hiện tại chưa đủ thông tin để xác định chắc chắn việc đổi phụ kiện lỗi trong 7 ngày.
+
+Kết luận: phụ kiện không được bảo hành trọn đời; còn có được đổi do lỗi nhà sản xuất trong 7 ngày hay không thì chính sách cung cấp chưa nêu rõ.","Bảo hành trọn đời: Phụ kiện không được bao gồm trong chính sách bảo hành trọn đời của Adore.
+Đổi hàng khi lỗi do nhà sản xuất: Nếu phụ kiện bị lỗi do nhà sản xuất trong vòng 7 ngày kể từ ngày mua, bạn có thể đổi theo chính sách đổi hàng.
+Thời hạn đổi: 7 ngày kể từ ngày mua (đối với lỗi do nhà sản xuất).
+Chi phí vận chuyển: Bạn phải trả phí ship gửi hàng tới Adore; Adore sẽ chịu 100 % phí chuyển hàng lại cho bạn.
+Điều kiện: Phụ kiện phải còn nguyên vẹn, chưa qua sử dụng, có tem, mã vạch, phụ kiện đi kèm và hóa đơn.
+Vì vậy, mặc dù phụ kiện không được bảo hành trọn đời, nhưng trong 7 ngày đầu nếu lỗi do nhà sản xuất, bạn vẫn được đổi theo chính sách đổi hàng.",PASS
+"Con biến tần bơm nước mặt trời gd100 pv bên công ty dat bảo hành mấy năm thế, tính ngày từ lúc nào để tui còn ghi sổ cho khách dưới quê?",rank1_CHÍNH_SÁCH_BẢO_HÀNH__ĐỔI_TRẢ_CÁC_SẢN_PHẨM_NLMT_....pdf,rank1_CHÍNH_SÁCH_BẢO_HÀNH__ĐỔI_TRẢ_CÁC_SẢN_PHẨM_NLMT_....pdf,"Biến tần bơm năng lượng mặt trời GD100-PV được bảo hành 1,5 năm, thời gian bảo hành bắt đầu tính từ ngày giao hàng ghi trên hóa đơn hoặc phiếu giao hàng.","Kết luận: Con biến tần bơm nước mặt trời GD100-PV của công ty DAT được bảo hành 1.5 năm, tính từ ngày giao hàng ghi trên hóa đơn/Phiếu giao hàng. Điểu kiện: Sản phẩm phải là biến tần bơm nước mặt trời GD100-PV của công ty DAT. Mốc thời gian: Ngày giao hàng ghi trên hóa đơn/Phiếu giao hàng. Địa điểm: Không có thông tin về địa điểm cụ thể. Loại sản phẩm: Biến tần bơm nước mặt trời GD100-PV. Hàng: Không có thông tin về hàng cụ thể.",PASS
+"Inverter hòa lưới gửi vô trạm nguyễn văn quá q12 thì mất mấy ngày các anh mới sửa xong gửi ra, cước gửi vô đó với cước gửi ngược về ai chịu, mà nếu máy bị nứt vỡ ko đủ chuẩn bảo hành thì bên mình xử lý sao?",rank1_CHÍNH_SÁCH_BẢO_HÀNH__ĐỔI_TRẢ_CÁC_SẢN_PHẨM_NLMT_....pdf,rank1_CHÍNH_SÁCH_BẢO_HÀNH__ĐỔI_TRẢ_CÁC_SẢN_PHẨM_NLMT_....pdf,"Thời gian sửa chữa hoàn tất trong vòng 24 giờ làm việc kể từ lúc nhận thiết bị. Khách gửi hàng phải tự chịu tiền cước chuyển máy lỗi đến trung tâm. Nếu máy bị vỡ không đủ điều kiện bảo hành thì DAT Group báo giá sửa chữa, khách đồng ý mới làm và khách tự chịu cước vận chuyển gửi về. Trường hợp máy đủ chuẩn bảo hành thì DAT Group chịu cước gửi trả lại cho khách.","Thời gian sửa chữa: Chính sách không ghi rõ số ngày cụ thể; DAT Group sẽ tiến hành bảo hành ngay khi sản phẩm đáp ứng điều kiện bảo hành.
+Chi phí vận chuyển tới trung tâm: Khách hàng chịu chi phí gửi inverter tới địa chỉ 716/6 Nguyễn Văn Quá, Q. 12, TP HCM. (EVIDENCE #1)
+Chi phí vận chuyển trả lại:
+Nếu sản phẩm được bảo hành (điều kiện hợp lệ) – DAT Group chịu chi phí vận chuyển về khách. (EVIDENCE #2)",PASS
+Bên kamereo có hotline khiếu nại đổi đồ ko cho xin số gấp,rank1_chính_sách_đổi_trả_hàng_hóa___điều_khoản_xử_lý.pdf,rank1_chính_sách_đổi_trả_hàng_hóa___điều_khoản_xử_lý.pdf,Số điện thoại đường dây nóng hỗ trợ của Kamereo là 0812 46 37 27.,"Kamereo có đường dây nóng để khách hàng khiếu nại, đổi trả hoặc yêu cầu hỗ trợ:
+
+Hotline chính: 0812 46 37 27 – số này được ghi rõ trong mục “Kênh liên hệ” của chính sách.
+Khách hàng cũng có thể liên hệ qua các kênh hỗ trợ khác được liệt kê trong Mục 8 của chính sách (ví dụ: email, chat, hoặc các kênh giao dịch chính thức trên website).
+Khi gọi, nhân viên sẽ xác nhận yêu cầu trong vòng 4 giờ làm việc kể từ thời điểm gọi.
+Nếu cần gửi tài liệu, khách hàng phải cung cấp mã đơn hàng, tên/mã hàng, số lượng, mô tả tình trạng và hình ảnh (điều kiện tối thiểu).
+Đối với các yêu cầu đổi/trả, Kamereo sẽ kiểm tra và xác minh nội bộ trong 8 giờ làm việc (tương đương 1 ngày làm việc) nếu khách hàng đã cung cấp đầy đủ thông tin.
+Vì vậy, Kamereo có hotline và khách hàng có thể nhanh chóng nhận được số điện thoại để liên hệ.",PASS
+"Nhà hàng tôi ở Cầu Giấy nhận rau củ lúc 3 rưỡi chiều mở ra thấy dập úng cả mớ, giờ tôi chụp hình bắt shipper cầm về luôn rồi trừ thẳng tiền trên công nợ đơn này có được không, hay kamereo bắt phải làm thế nào mới chịu đền?",rank1_chính_sách_đổi_trả_hàng_hóa___điều_khoản_xử_lý.pdf,rank1_chính_sách_đổi_trả_hàng_hóa___điều_khoản_xử_lý.pdf,Đơn hàng kết thúc giao sau 14:00 tại Hà Nội không được trả hàng và không được trừ tiền công nợ. Kamereo chỉ hỗ trợ đổi hoặc bù hàng vào đơn kế tiếp sau khi xác minh đủ thông tin và hình ảnh lỗi.,"Bạn không thể trừ tiền ngay lập tức từ công nợ đơn này.
+Theo chính sách của Kamereo, đối với đơn hàng giao sau thời gian kết thúc giao (Hà Nội: 14:00), Kamereo chỉ hỗ trợ đổi/bù hàng vào đơn hàng tiếp theo và không áp dụng trả hàng hay điều chỉnh giá trị đơn hàng.
+
+Để được đổi/bù, bạn cần:
+
+Nộp yêu cầu qua kênh hỗ trợ được ghi trong Mục 8 của chính sách.
+Cung cấp đầy đủ thông tin: mã đơn hàng, tên/mã hàng, số lượng, mô tả tình trạng và hình ảnh (đã chụp).
+Đảm bảo hàng còn nguyên trang và không có dấu hiệu đã qua sử dụng, bảo quản đúng cách (điều kiện Mục 6).
+Kamereo sẽ xác nhận tiếp nhận trong vòng 4 giờ làm việc kể từ khi yêu cầu được gửi.
+Nếu hàng đáp ứng các điều kiện trên, Kamereo sẽ thực hiện đổi/bù vào đơn hàng tiếp theo. Nếu không, họ có quyền từ chối tiếp nhận hoặc xử lý yêu cầu.",PASS
+,,,,,REVIEW
+,,,,,REVIEW
