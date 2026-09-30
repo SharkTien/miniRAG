@@ -40,7 +40,6 @@ production được chạy riêng trong service Nginx.
 
 - FastAPI và Python 3.12 cho API/worker.
 - PostgreSQL + pgvector cho metadata, chunk và embedding.
-- pgAdmin tùy chọn tại `http://localhost:41874` để xem PostgreSQL/pgvector.
 - MinIO cho file gốc và bằng chứng trực quan.
 - React/Vite và Nginx cho giao diện production.
 - GitHub Actions cho lint, test, build và smoke test.
