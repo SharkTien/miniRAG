@@ -235,7 +235,15 @@ services:
 
 volumes:
   postgres_data:
+    # Reuse the persistent database created by the previous project name.
+    # Keeping an explicit volume name prevents data loss when Compose project
+    # names change between local runs.
+    external: true
+    name: mini_rag_postgres_data
   minio_data_v2:
+    # Reuse the existing object store containing uploaded documents.
+    external: true
+    name: mini_rag_minio_data_v2
 
 networks:
   default:
