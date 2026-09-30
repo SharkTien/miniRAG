@@ -86,6 +86,21 @@ services:
       timeout: 5s
       retries: 10
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    ports:
+      - "${PGADMIN_PORT:-41874}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   minio:
     # The upstream MinIO images are no longer anonymously pullable from the
     # old quay.io reference.  Bitnami Legacy publishes a compatible S3 server
@@ -235,6 +250,7 @@ services:
 
 volumes:
   postgres_data:
+  pgadmin_data:
   minio_data_v2:
 
 networks:
