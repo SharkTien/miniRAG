@@ -40,12 +40,23 @@ def upload_docs(
 ):
     """Upload docs."""
     docs = []
+    # Direct unit tests call this handler without FastAPI resolving Form(...),
+    # so the defaults can be ``Form`` objects rather than list/string values.
+    # Treat those unresolved defaults as absent form fields.
+    requested_display_names = display_names if isinstance(display_names, list) else None
+    requested_display_name = display_name if isinstance(display_name, str) else None
     for index, file in enumerate(files):
         requested_name = (
-            display_names[index] if display_names and index < len(display_names)
-            else (display_name if index == 0 else None)
+            requested_display_names[index]
+            if requested_display_names and index < len(requested_display_names)
+            else (requested_display_name if index == 0 else None)
         )
-        doc_id = doc_service.process_upload(file, actor, requested_name)
+        # Preserve compatibility with lightweight test/integration services
+        # that still implement the original two-argument upload contract.
+        if requested_name:
+            doc_id = doc_service.process_upload(file, actor, requested_name)
+        else:
+            doc_id = doc_service.process_upload(file, actor)
         doc_service.repo.update_document_status(doc_id, "queued")
         # Processing is asynchronous.  The worker performs extraction,
         # chunking and embedding after the upload has been acknowledged, so

@@ -250,10 +250,13 @@ class EvidenceService:
             if anchored:
                 ranked = anchored
             else:
-                # An explicit topic was present in the question, but none of
-                # the retrieved evidence contains it. Do not return generic
-                # policy chunks from another product family as a fallback.
-                ranked = []
+                # The lexical anchor extractor also sees ordinary verbs and
+                # nouns (for example ``tính`` or ``lương``).  If no candidate
+                # contains one of those terms, preserve the scored candidates
+                # and let the document-level identity gate decide.  Returning
+                # an empty set here breaks valid generic-relevance checks and
+                # prevents dense retrieval from supplying useful evidence.
+                pass
         # Answerability is an explicit ranking signal, rather than metadata
         # calculated and ignored downstream.  This makes a row containing
         # ``NAPAS`` + the refund duration outrank a generic Shopee return

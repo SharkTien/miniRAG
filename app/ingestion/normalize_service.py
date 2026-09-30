@@ -35,7 +35,15 @@ class NormalizeService:
         lines = []
         for line in text.splitlines():
             clean_line = cls._spaces.sub(" ", line).strip()
-            if not clean_line or cls._export_chrome.match(clean_line):
+            if cls._export_chrome.match(clean_line):
+                continue
+            if not clean_line:
+                # Keep one separator between adjacent content lines.  The
+                # previous implementation removed every empty line, which
+                # collapsed paragraph boundaries and broke Markdown/table
+                # extraction expectations.
+                if lines and lines[-1] != "":
+                    lines.append("")
                 continue
             lines.append(clean_line)
         return cls._blank_lines.sub("\n\n", "\n".join(lines)).strip()
