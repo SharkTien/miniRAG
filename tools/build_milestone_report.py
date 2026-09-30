@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 import openpyxl
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -480,6 +480,17 @@ def build():
             spaceAfter=8,
         )
     )
+    styles.add(
+        ParagraphStyle(
+            name="EvalText",
+            parent=styles["BodyText"],
+            fontName=regular,
+            fontSize=8.1,
+            leading=10.4,
+            textColor=colors.HexColor("#1E293B"),
+            spaceAfter=0,
+        )
+    )
 
     document = ReportDocument(
         str(OUTPUT),
@@ -665,16 +676,50 @@ def build():
             str(retrieved_answer or ""),
         ))
 
+    comparison_notes = [
+        ("Khớp nội dung cốt lõi:", "2–5 ngày làm việc và hoàn về thẻ NAPAS đều xuất hiện đúng.", "#15803D"),
+        ("Khớp nội dung cốt lõi:", "Ba phương thức trả hàng và điều kiện hỗ trợ cước được nêu đầy đủ.", "#15803D"),
+        ("Sai lệch chính:", "Hệ thống khẳng định được tách riêng áo và hoàn tiền, trong khi ground truth giữ kết luận mở.", "#B91C1C"),
+        ("Sai lệch chính:", "Hệ thống khẳng định được đổi phụ kiện, trong khi ground truth yêu cầu nêu thiếu dữ kiện.", "#B91C1C"),
+        ("Khớp nội dung cốt lõi:", "Thời hạn 1,5 năm và mốc ngày giao hàng đều đúng; phần thêm không làm đổi đáp án.", "#15803D"),
+        ("Sai lệch chính:", "Hệ thống bỏ mốc 24 giờ và quy trình báo giá khi máy nứt vỡ.", "#B91C1C"),
+        ("Khớp nội dung cốt lõi:", "Số hotline 0812 46 37 27 trùng ground truth.", "#15803D"),
+        ("Khớp nội dung cốt lõi:", "Không trừ công nợ ngay và đổi/bù ở đơn tiếp theo đều được trả đúng.", "#15803D"),
+    ]
     for index, (question, expected_source, retrieved_source, expected, observed) in enumerate(retrieval_cases):
         verdict = verdicts[index] if index < len(verdicts) else "Chưa phân loại"
         source_match = "Khớp" if expected_source == retrieved_source else "Không khớp"
-        story.append(Paragraph(escape(f"{index + 1}. Trường hợp kiểm tra"), styles["ReportH2"]))
-        story.append(rich(f"<b>Câu hỏi nguyên văn:</b><br/>{exact(question)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Nguồn mong đợi:</b> {exact(expected_source)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Nguồn hệ thống:</b> {exact(retrieved_source)} — <b>{source_match}</b>", styles["BodyVi"]))
-        story.append(rich(f"<b>Đáp án mong đợi nguyên văn:</b><br/>{exact(expected)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Câu trả lời hệ thống nguyên văn:</b><br/>{exact(observed)}", styles["BodyVi"]))
-        story.append(rich(f"<b>Đánh giá:</b> {escape(verdict)}", styles["BodyVi"]))
+        note_title, note_text, note_color = comparison_notes[index]
+        verdict_color = "#15803D" if verdict == "Đạt" else "#B91C1C"
+        header = Table([[Paragraph(f"<b>CA {index + 1:02d}</b>  ·  {escape(verdict)}", ParagraphStyle(
+            f"EvalHeader{index}", parent=styles["BodyText"], fontName="ReportSans-Bold", fontSize=9.2,
+            leading=11, textColor=colors.white)), Paragraph(escape("Đối chiếu ground truth ↔ output"), ParagraphStyle(
+            f"EvalHeaderRight{index}", parent=styles["BodyText"], fontName=regular, fontSize=7.8,
+            leading=10, alignment=TA_RIGHT, textColor=colors.white))]], colWidths=[34 * mm, 136 * mm])
+        header.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(verdict_color)),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        card = [Spacer(1, 5), header]
+        card.append(rich(f"<b><font color=\"#2563EB\">CÂU HỎI</font></b><br/>{exact(question)}", styles["EvalText"]))
+        card.append(Table([            [rich('<b><font color="#15803D">GROUND TRUTH</font></b>', styles["EvalText"]), rich('<b><font color="#2563EB">OUTPUT HỆ THỐNG</font></b>', styles["EvalText"])],
+            [rich(f"<b>Nguồn mong đợi:</b> {exact(expected_source)}<br/><br/><b>Đáp án mong đợi:</b><br/>{exact(expected)}", styles["EvalText"]),
+             rich(f"<b>Nguồn hệ thống:</b> {exact(retrieved_source)}<br/><b>Đối chiếu nguồn:</b> {source_match}<br/><br/><b>Câu trả lời hệ thống:</b><br/>{exact(observed)}", styles["EvalText"])],
+        ], colWidths=[85 * mm, 85 * mm], style=TableStyle([
+            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#DCFCE7")),
+            ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#DBEAFE")),
+            ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#F8FAFC")),
+            ("BOX", (0, 0), (-1, -1), 0.45, colors.HexColor("#CBD5E1")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ])))
+        card.append(rich(f"<b><font color=\"{note_color}\">SO SÁNH:</font></b> <font color=\"{note_color}\"><b>{escape(note_title)}</b></font> {escape(note_text)}", styles["EvalText"]))
+        story.append(KeepTogether(card))
+    
     body("Kết quả tổng hợp: 5/8 câu đạt đầy đủ và 3/8 câu chưa đạt. Cả 8 trường hợp đều truy xuất đúng tài liệu mong đợi; ba lỗi còn lại nằm ở mức độ đầy đủ và tính kỷ luật của câu trả lời, không phải chọn sai tài liệu.")
 
     h1("9. Cách tạo source trong câu trả lời")
