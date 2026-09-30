@@ -135,35 +135,99 @@ def evidence_image(path: Path, caption: str, regular: str, width: float = 166 * 
 
 
 def pipeline_diagram(regular: str) -> Drawing:
-    """Draw the end-to-end data and retrieval flow as a clean vector diagram."""
-    drawing = Drawing(510, 172)
-    labels = [
-        ("Tài liệu", "PDF / DOCX / TXT"),
-        ("Trích xuất", "Docling + OCR"),
-        ("Chuẩn hóa", "làm sạch + chia đoạn"),
-        ("Lưu trữ", "vector + metadata"),
-        ("Truy xuất", "từ khóa + ngữ nghĩa"),
-        ("Trả lời", "bằng chứng + mô hình"),
-    ]
-    colors_fill = ["#E0F2FE", "#DBEAFE", "#DCFCE7", "#FEF3C7", "#FCE7F3", "#EDE9FE"]
-    box_w, box_h, gap = 76, 48, 9
-    start_x = 4
-    y = 92
-    for idx, ((title, subtitle), fill) in enumerate(zip(labels, colors_fill)):
-        x = start_x + idx * (box_w + gap)
-        drawing.add(Rect(x, y, box_w, box_h, rx=7, ry=7, fillColor=colors.HexColor(fill), strokeColor=colors.HexColor("#64748B"), strokeWidth=0.8))
-        drawing.add(String(x + box_w / 2, y + 29, title, fontName="ReportSans-Bold", fontSize=8.2, fillColor=colors.HexColor("#0F172A"), textAnchor="middle"))
-        drawing.add(String(x + box_w / 2, y + 14, subtitle, fontName=regular, fontSize=6.4, fillColor=colors.HexColor("#334155"), textAnchor="middle"))
-        if idx < len(labels) - 1:
-            next_x = x + box_w + 1
-            arrow_x = x + box_w + gap - 1
-            drawing.add(Line(next_x, y + box_h / 2, arrow_x, y + box_h / 2, strokeColor=colors.HexColor("#0F3D5E"), strokeWidth=1.2))
-            drawing.add(Polygon([arrow_x, y + box_h / 2, arrow_x - 5, y + box_h / 2 + 3, arrow_x - 5, y + box_h / 2 - 3], fillColor=colors.HexColor("#0F3D5E"), strokeColor=None))
-    drawing.add(String(255, 58, "Mỗi đoạn giữ mã tài liệu, số trang, loại dữ liệu và thông tin nguồn để truy ngược", fontName=regular, fontSize=7.4, fillColor=colors.HexColor("#475569"), textAnchor="middle"))
-    drawing.add(Line(4, 45, 506, 45, strokeColor=colors.HexColor("#CBD5E1"), strokeWidth=0.6))
-    drawing.add(String(255, 27, "Luồng tải tài liệu và luồng hỏi đáp dùng chung lớp metadata và bằng chứng", fontName="ReportSans-Bold", fontSize=8, fillColor=colors.HexColor("#176B87"), textAnchor="middle"))
-    return drawing
+    """Draw the detailed ingestion and retrieval architecture used in the report."""
+    drawing = Drawing(510, 310)
+    palette = {
+        "data": colors.HexColor("#FDE3A7"),
+        "process": colors.HexColor("#BFD7F7"),
+        "control": colors.HexColor("#16324A"),
+        "output": colors.HexColor("#A9E4C5"),
+        "ink": colors.HexColor("#16324A"),
+        "blue": colors.HexColor("#2563EB"),
+        "line": colors.HexColor("#CBD5E1"),
+    }
 
+    def label(x, y, text, size=7.4, color="#16324A", bold=False, anchor="start"):
+        drawing.add(String(x, y, text, fontName="ReportSans-Bold" if bold else regular,
+                           fontSize=size, fillColor=colors.HexColor(color), textAnchor=anchor))
+
+    def box(x, y, w, h, title, lines, fill, title_color="#16324A"):
+        drawing.add(Rect(x, y, w, h, rx=9, ry=9, fillColor=fill,
+                         strokeColor=colors.HexColor("#64748B"), strokeWidth=0.8))
+        label(x + 10, y + h - 18, title, 9.2, title_color, True)
+        for idx, line in enumerate(lines):
+            label(x + 10, y + h - 33 - idx * 11, line, 6.8, "#334155")
+
+    def arrow(x1, y1, x2, y2, dashed=False):
+        line = Line(x1, y1, x2, y2, strokeColor=palette["blue"], strokeWidth=1.25)
+        if dashed:
+            line.strokeDashArray = [4, 3]
+        drawing.add(line)
+        import math
+        angle = math.atan2(y2 - y1, x2 - x1)
+        size = 5
+        left = (x2 - size * math.cos(angle - 0.45), y2 - size * math.sin(angle - 0.45))
+        right = (x2 - size * math.cos(angle + 0.45), y2 - size * math.sin(angle + 0.45))
+        drawing.add(Polygon([x2, y2, left[0], left[1], right[0], right[1]],
+                            fillColor=palette["blue"], strokeColor=None))
+
+    # Header and legend, matching the reference atlas style.
+    label(4, 292, "MINI RAG / PIPELINE ATLAS", 8.5, "#2563EB", True)
+    label(4, 274, "Kiến trúc luồng dữ liệu và truy xuất", 17, "#16324A", True)
+    legend = [("Dữ liệu", palette["data"]), ("Xử lý", palette["process"]),
+              ("Điều phối / kiểm soát", palette["control"]), ("Đầu ra", palette["output"])]
+    lx = 5
+    for name, fill in legend:
+        drawing.add(Rect(lx, 251, 11, 11, rx=2, ry=2, fillColor=fill,
+                         strokeColor=colors.HexColor("#64748B"), strokeWidth=0.5))
+        label(lx + 16, 253, name, 7.1)
+        lx += 100 if name != "Điều phối / kiểm soát" else 137
+
+    # Ingestion lane: source data becomes searchable evidence.
+    label(5, 227, "LUỒNG NẠP DỮ LIỆU", 7.2, "#176B87", True)
+    top = [(5, "Tài liệu", ["PDF · DOCX · TXT"], palette["data"]),
+           (105, "Trích xuất", ["Docling · OCR NVIDIA", "giữ trang / bố cục"], palette["process"]),
+           (205, "Chuẩn hóa", ["làm sạch · chia đoạn", "bảng / hình / chú thích"], palette["process"]),
+           (305, "Vector hóa", ["embedding NVIDIA", "metadata + nguồn"], palette["process"]),
+           (405, "Kho bằng chứng", ["PostgreSQL + pgvector", "file gốc ở kho đối tượng"], palette["data"])]
+    for x, title, lines, fill in top:
+        box(x, 170, 90, 47, title, lines, fill)
+    for x in [95, 195, 295, 395]:
+        arrow(x, 193, x + 10, 193)
+
+    # Query lane and control plane.
+    label(5, 145, "LUỒNG TRUY VẤN", 7.2, "#176B87", True)
+    bottom = [(5, "Câu hỏi", ["ý định · thực thể", "ràng buộc cần trả lời"], palette["data"]),
+              (105, "Lập kế hoạch", ["từ khóa quan trọng", "phạm vi tài liệu"], palette["process"]),
+              (205, "Hybrid search", ["BM25 + dense", "mở rộng ứng viên"], palette["process"]),
+              (305, "Xếp hạng", ["lọc tài liệu", "khả năng trả lời"], palette["process"]),
+              (405, "Answer + source", ["mô hình NVIDIA", "nguồn · chunk · trang"], palette["output"])]
+    for x, title, lines, fill in bottom:
+        box(x, 84, 90, 47, title, lines, fill)
+    for x in [95, 195, 295, 395]:
+        arrow(x, 107, x + 10, 107)
+    # Shared storage and the control plane.
+    arrow(450, 170, 450, 132)
+    label(455, 151, "đọc bằng chứng", 6.2, "#475569")
+    drawing.add(Rect(178, 140, 154, 24, rx=6, ry=6, fillColor=palette["control"], strokeColor=palette["control"]))
+    label(255, 154, "ĐIỀU PHỐI RAG", 8.2, "#FFFFFF", True, "middle")
+    label(255, 145, "phạm vi · điểm · nguồn", 6.3, "#D8E7F5", False, "middle")
+    arrow(150, 131, 178, 151)
+    arrow(332, 151, 355, 131)
+    arrow(350, 84, 332, 151, dashed=True)
+
+    # Explanatory panel.
+    drawing.add(Rect(5, 5, 500, 60, rx=7, ry=7, fillColor=colors.white,
+                     strokeColor=palette["line"], strokeWidth=0.8))
+    label(14, 49, "ĐIỂM CHÍNH", 7.4, "#008C95", True)
+    label(14, 36, "Tài liệu trở thành bằng chứng có nguồn trước khi mô hình trả lời.", 7.8)
+    label(14, 23, "Ví dụ: câu hỏi về NAPAS phải giữ được đoạn 2–5 ngày và mốc tính tiền.", 7.4, "#475569")
+    label(326, 49, "CÁCH ĐỌC", 7.4, "#2563EB", True)
+    label(326, 36, "Nét liền = luồng chính · nét đứt = phản hồi", 7.0, "#475569")
+    label(326, 23, "Kho bằng chứng dùng chung cho truy xuất và trích nguồn.", 7.0, "#475569")
+    drawing.add(Line(5, 73, 505, 73, strokeColor=palette["line"], strokeWidth=0.6))
+    label(5, 0, "Luồng nạp dữ liệu ở trên · luồng hỏi đáp ở dưới · lớp điều phối kiểm soát nguồn", 6.8, "#64748B")
+    return drawing
 
 def table(data, widths, regular, header=True, small=False):
     font_size = 7.3 if small else 8.1
@@ -512,19 +576,7 @@ def build():
     ], [62 * mm, 116 * mm], regular, small=True))
     body("Trong prompt, bằng chứng được đánh dấu dạng [EVIDENCE #... | File... | Chunk... | Trang...]. Sau khi mô hình sinh câu trả lời, API trả lại answer cùng mảng sources; nếu không có bằng chứng thì sources rỗng và hệ thống không dựng nguồn giả.")
 
-    h1("10. Bằng chứng nghiệm thu")
-    h2("Mã nguồn và đóng gói")
-    body("Các tệp đóng gói Docker mô tả API, tiến trình nền, PostgreSQL + pgvector, kho đối tượng và giao diện. Lệnh docker compose config --quiet kiểm tra cú pháp trước khi chạy; ảnh Hình 1 cho thấy các bước chất lượng, giao diện và Docker đã chạy thành công trên GitHub Actions.")
-    h2("Tải và xử lý tài liệu")
-    body("POST /documents nhận PDF, TXT và DOCX, ghi bản ghi queued rồi để tiến trình nền trích xuất, làm sạch, chia đoạn, tạo vector và lưu metadata. Hình 3 cho thấy tài liệu xuất hiện trong kho; Hình 4 cho thấy đoạn văn sau khi chia. Kiểm thử API xác nhận file không hỗ trợ bị từ chối và file hợp lệ trả queued.")
-    h2("Lưu vector và metadata")
-    body("Hình 2 là bằng chứng trực tiếp từ PostgreSQL: document_chunks có content, metadata jsonb và embedding vector(2048), cùng khóa ngoại về documents. File gốc nằm ở MinIO; object_key trong documents liên kết bản ghi với file.")
-    h2("API hỏi đáp và nguồn")
-    body("POST /query trả answer cùng sources; POST /query/stream gửi token trước rồi gửi metadata nguồn. Kiểm thử API bao phủ câu hỏi hợp lệ, câu hỏi rỗng và câu hỏi không có bằng chứng. Nguồn được tạo từ chunk đã chọn, không phải văn bản do mô hình tự đặt.")
-    h2("Kiểm tra tự động và tài liệu")
-    body("Ruff, biên dịch, 22 kiểm thử, bản dựng giao diện và kiểm tra Docker là các bằng chứng có thể chạy lại. README, tài liệu kiến trúc, hồ sơ nghiên cứu dữ liệu và bảng kiểm tra truy xuất được bàn giao cùng mã nguồn. Quy trình CI cần được xác nhận lại sau mỗi lần thay đổi.")
-
-    h1("11. Hạn chế và kế hoạch tiếp theo")
+    h1("10. Hạn chế và kế hoạch tiếp theo")
     bullet("Bộ đánh giá hiện tập trung 5 PDF SynthDocQA; cần thêm bộ tài liệu thực tế cân bằng theo loại dữ liệu.")
     bullet("Chỉ mục phần tử hình và OCR vùng chú thích chưa bật cho mọi tài liệu vận hành.")
     bullet("Bộ xếp hạng hiện dựa trên luật; chưa có mô hình xếp hạng học từ phản hồi người dùng.")
