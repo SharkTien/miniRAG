@@ -57,6 +57,15 @@ def build_grounded_qa_system_prompt() -> str:
     return GROUNDED_QA_SYSTEM_PROMPT
 
 
+_SELF_CAPABILITY_ANSWER = (
+    "Tôi có thể đọc và tìm thông tin trong các tài liệu đã được tải lên, "
+    "kết hợp tìm kiếm từ khóa và ngữ nghĩa, tóm tắt hoặc giải thích nội dung, "
+    "và trả lời kèm nguồn tài liệu liên quan. Tôi cũng có thể duy trì ngữ cảnh "
+    "của cuộc trò chuyện và trả kết quả từng phần khi hệ thống đang xử lý. "
+    "Nếu tài liệu không có đủ dữ kiện, tôi sẽ nói rõ phần còn thiếu thay vì tự suy đoán."
+)
+
+
 def _extract_time_context(question: str) -> str:
     """Tính số tháng từ các mốc thời gian đề cập trong câu hỏi.
 
@@ -127,6 +136,8 @@ _CHITCHAT_PATTERNS = [
     r"\bhow\s+are\s+you\b",
     r"\bwhat'?s\s+up\b",
     # Identity / capability questions
+    r"^\s*(khả\s+năng|năng\s+lực|chức\s+năng)\s+(của\s+)?(bạn|hệ\s+thống|chatbot|trợ\s+lý)\b",
+    r"\b(bạn|chatbot|trợ\s+lý)\s+(có\s+thể|làm\s+được|hỗ\s+trợ)\b",
     r"\bbạn\s+(là\s+ai|tên\s+là\s+gì|làm\s+được\s+gì|có\s+thể\s+làm\s+gì)\b",
     r"\bwho\s+are\s+you\b",
     r"\bwhat\s+(can|do)\s+you\s+do\b",
@@ -213,6 +224,62 @@ class RagService:
         ):
             return True
         return False
+
+    def _is_self_capability(self, question: str) -> bool:
+        """Return whether the user asks about this assistant or system itself."""
+        normalized = re.sub(r"\s+", " ", (question or "").strip().casefold())
+        return bool(re.search(
+            r"^(?:khả năng|năng lực|chức năng)\s+(?:của )?(?:bạn|hệ thống|chatbot|trợ lý)\b"
+            r"|^(?:bạn|chatbot|trợ lý)\s+(?:có thể|làm được|hỗ trợ)\b"
+            r"|^(?:bạn là ai|bạn tên là gì|what can you do|who are you)\b",
+            normalized,
+            re.IGNORECASE,
+        ))
+
+    def _resolve_followup(self, question: str, history: Optional[List[Dict[str, Any]]]) -> str:
+        """Resolve a short follow-up against recent turns before retrieval.
+
+        History is used only to interpret the current turn. The resolver returns
+        a compact standalone query, never an answer or new factual assumptions.
+        """
+        if not history:
+            return question
+        # Only spend a resolver call where the current turn is likely elliptical:
+        # dates/numbers, very short phrases, or explicit references.
+        words = re.findall(r"[\wÀ-ỹ]+", question, flags=re.UNICODE)
+        looks_elliptical = (
+            len(words) <= 7
+            or bool(re.search(r"\b(nó|đó|vậy|thế|còn|như vậy|ngày|hôm đó)\b", question, re.I))
+            or bool(re.search(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b", question))
+        )
+        if not looks_elliptical:
+            return question
+
+        turns = history[-8:]
+        transcript = "\n".join(
+            f"{str(turn.get('role', ''))[:20]}: {str(turn.get('content', ''))[:1200]}"
+            for turn in turns if turn.get("content")
+        )
+        if not transcript:
+            return question
+        prompt = (
+            "Dựa vào hội thoại gần đây, viết lại tin nhắn mới thành một truy vấn độc lập để tra cứu/"
+            "trả lời. Chỉ bổ sung tham chiếu đã rõ từ hội thoại; giữ nguyên mọi con số, ngày tháng và "
+            "ý định. Không trả lời câu hỏi, không tự thêm dữ kiện. Nếu người dùng đổi chủ đề hoặc "
+            "không đủ căn cứ nối ngữ cảnh, trả lại nguyên văn tin nhắn mới. Chỉ xuất truy vấn đã viết lại.\n\n"
+            f"HỘI THOẠI:\n{transcript}\n\nTIN NHẮN MỚI:\n{question}"
+        )
+        try:
+            resolved = self._call_llm(
+                "Bạn là bộ phân giải tham chiếu hội thoại chính xác. Chỉ xuất một truy vấn độc lập.",
+                prompt,
+            ).strip().strip('"')
+            if resolved and len(resolved) <= max(600, len(question) * 8):
+                logger.info("Resolved contextual follow-up for retrieval")
+                return resolved
+        except Exception as exc:
+            logger.warning("Follow-up resolution failed; using original query: %s", exc)
+        return question
 
     @staticmethod
     def _is_refusal_answer(answer: str) -> bool:
@@ -452,6 +519,7 @@ class RagService:
         top_k: int = TOP_K,
         document_id: Optional[str] = None,
         document_ids: Optional[List[str]] = None,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
         on_token=None,
     ) -> Dict[str, Any]:
         """
@@ -461,12 +529,31 @@ class RagService:
         LLM, and returns an answer with mandatory source citations.
         """
         t0 = time.time()
-        q = question.strip()
+        original_question = question.strip()
+        q = original_question
         if not q:
             return {
                 "answer": "Vui lòng nhập câu hỏi cần tra cứu.",
                 "sources": [],
                 "execution_time_seconds": 0.0,
+            }
+
+        # Resolve contextual fragments before the short-query chitchat guardrail
+        # (a bare date such as "15/09/2026" would otherwise bypass retrieval).
+        q = self._resolve_followup(q, conversation_history)
+
+        # ── INTENT ROUTER: system/self capability ──────────────────────────────
+        # Capability questions are system knowledge, not document knowledge.
+        # Bypass retrieval and EvidenceService so unrelated chunks cannot force
+        # an abstention such as "insufficient evidence".
+        if self._is_self_capability(q):
+            return {
+                "answer": _SELF_CAPABILITY_ANSWER,
+                "sources": [],
+                "retrieved_chunks": [],
+                "decision": "self_capability",
+                "query_plan": {"intent": "self_capability", "requires_rag": False},
+                "execution_time_seconds": round(time.time() - t0, 2),
             }
 
         # ── GUARDRAIL: Chitchat / General conversation ─────────────────────────
